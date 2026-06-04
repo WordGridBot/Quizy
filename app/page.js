@@ -37,6 +37,30 @@ export default function DashboardPage() {
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
 
+  // Backend Engine status tracking
+  const [engineStatus, setEngineStatus] = useState('checking'); // checking, online, sleeping
+
+  const wakeUpBackend = async (silent = false) => {
+    if (!silent) setEngineStatus('checking');
+    try {
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://japusahu-quizy.hf.space';
+      const res = await fetch(backendUrl, { method: 'GET', mode: 'cors' });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.status === 'online') {
+          setEngineStatus('online');
+          return true;
+        }
+      }
+      setEngineStatus('sleeping');
+      return false;
+    } catch (err) {
+      console.error("Backend wake-up failed:", err);
+      setEngineStatus('sleeping');
+      return false;
+    }
+  };
+
   // 1. Lifecycle verification: Check if session cookie is active on load
   useEffect(() => {
     async function verifySession() {
@@ -75,6 +99,21 @@ export default function DashboardPage() {
       console.error("Failed to sync background metrics profiles:", err);
     }
   };
+
+  // 3. Keep Hugging Face Backend Engine awake
+  useEffect(() => {
+    if (!user) return;
+    
+    // Initial wake-up call
+    wakeUpBackend(false);
+
+    // Set interval to ping every 2 minutes (120,000 ms) to keep the Space awake
+    const interval = setInterval(() => {
+      wakeUpBackend(true); // silent ping so it doesn't disturb the user if it's already active
+    }, 120000);
+
+    return () => clearInterval(interval);
+  }, [user]);
 
   // Client-side image compression utility
   const compressImage = (file) => {
@@ -144,6 +183,11 @@ export default function DashboardPage() {
   const handleGenerateExam = async () => {
     if (uploadedFiles.length === 0) return;
 
+    if (engineStatus !== 'online') {
+      setUploadStatus('Engine is sleeping / waking up. Waking up container first (this can take up to 30 seconds)...');
+      await wakeUpBackend(false);
+    }
+
     setUploadStatus('Compressing queued note images...');
     setIsScanning(true);
 
@@ -153,12 +197,27 @@ export default function DashboardPage() {
 
       setUploadStatus('Running AI OCR + Synthesis (this may take up to 45 seconds)...');
       
-      const res = await fetch('/api/analyze', {
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://japusahu-quizy.hf.space';
+      let targetUrl = '';
+      let headers = { 'Content-Type': 'application/json' };
+
+      if (backendUrl) {
+        const normalizedBase = backendUrl.replace(/\/$/, '');
+        targetUrl = normalizedBase.includes('hf.space') 
+          ? `${normalizedBase}/analyze` 
+          : `${normalizedBase}/api/analyze`;
+        
+        headers['X-API-Secret'] = process.env.NEXT_PUBLIC_API_SECRET || 'cgl-core-secret';
+      } else {
+        targetUrl = '/api/analyze';
+      }
+
+      const res = await fetch(targetUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ 
           imagesBase64: base64Array, 
-          userId: user?.id,
+          userId: user?.id || 'anonymous',
           examType,
           subject,
           questionCount
@@ -314,6 +373,33 @@ export default function DashboardPage() {
         </nav>
 
         <div className="flex items-center gap-4">
+          {/* Engine Status Indicator */}
+          <div className="flex items-center gap-2 px-3 py-1 rounded-full border border-zinc-900 bg-zinc-950/50">
+            <span className={`w-1.5 h-1.5 rounded-full ${
+              engineStatus === 'online' 
+                ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]' 
+                : engineStatus === 'checking'
+                  ? 'bg-amber-500 animate-pulse'
+                  : 'bg-zinc-600'
+            }`} />
+            <span className="text-[10px] font-mono text-zinc-400">
+              {engineStatus === 'online' 
+                ? 'Engine: Online' 
+                : engineStatus === 'checking'
+                  ? 'Engine: Waking up...'
+                  : 'Engine: Sleeping'}
+            </span>
+            {engineStatus === 'sleeping' && (
+              <button 
+                type="button"
+                onClick={() => wakeUpBackend(false)}
+                className="text-[9px] text-zinc-300 hover:text-white underline ml-1 cursor-pointer font-sans"
+              >
+                Wake
+              </button>
+            )}
+          </div>
+
           <span className="text-xs text-zinc-500">
             Username: <span className="text-zinc-300 font-semibold">{user.username}</span>
           </span>
