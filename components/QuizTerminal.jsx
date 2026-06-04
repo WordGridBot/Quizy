@@ -103,38 +103,38 @@ export default function QuizTerminal({ quizData, quizId, userId }) {
   if (quizComplete) {
     const accuracy = Math.round((score / quizData.length) * 100);
     return (
-      <div className="w-full bg-cyber-obsidian border border-cyber-slate/40 p-6 rounded-xl max-w-2xl mx-auto text-center backdrop-blur-md">
-        <Award className="w-16 h-16 text-cyber-cyan mx-auto mb-4 animate-bounce" />
-        <h2 className="text-2xl font-bold font-mono tracking-wide text-white mb-2">MOCK MATRIX EVALUATION</h2>
-        <p className="text-sm text-gray-400 mb-6">TCS Standard Metrics Logged Successfully</p>
+      <div className="glass-card p-8 max-w-2xl mx-auto text-center animate-slide-up">
+        <Award className="w-16 h-16 text-glass-accent mx-auto mb-4 animate-bounce" />
+        <h2 className="text-2xl font-bold tracking-wide text-gradient mb-2">Mock Exam Complete</h2>
+        <p className="text-sm text-glass-muted mb-6">Your performance has been recorded</p>
 
         <div className="grid grid-cols-3 gap-4 mb-8">
-          <div className="bg-cyber-void border border-cyber-slate/20 p-4 rounded-lg">
-            <div className="text-xs text-gray-400 uppercase tracking-wider mb-1">Final Score</div>
-            <div className="text-xl font-bold font-mono text-cyber-cyan">{score} / {quizData.length}</div>
+          <div className="glass-card p-5 text-center">
+            <div className="text-xs text-glass-muted uppercase tracking-wider mb-1">Final Score</div>
+            <div className="text-xl font-bold text-glass-accent">{score} / {quizData.length}</div>
           </div>
-          <div className="bg-cyber-void border border-cyber-slate/20 p-4 rounded-lg">
-            <div className="text-xs text-gray-400 uppercase tracking-wider mb-1">Precision</div>
-            <div className="text-xl font-bold font-mono text-cyber-emerald">{accuracy}%</div>
+          <div className="glass-card p-5 text-center">
+            <div className="text-xs text-glass-muted uppercase tracking-wider mb-1">Precision</div>
+            <div className="text-xl font-bold text-glass-success">{accuracy}%</div>
           </div>
-          <div className="bg-cyber-void border border-cyber-slate/20 p-4 rounded-lg">
-            <div className="text-xs text-gray-400 uppercase tracking-wider mb-1">Time Elapsed</div>
-            <div className="text-xl font-bold font-mono text-amber-400">{formatTime(timeSpent)}</div>
+          <div className="glass-card p-5 text-center">
+            <div className="text-xs text-glass-muted uppercase tracking-wider mb-1">Time Elapsed</div>
+            <div className="text-xl font-bold text-glass-amber">{formatTime(timeSpent)}</div>
           </div>
         </div>
 
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <button 
             onClick={resetQuiz}
-            className="flex items-center justify-center gap-2 px-5 py-3 rounded-lg font-semibold bg-cyber-slate hover:bg-gray-700 text-white border border-gray-600 transition"
+            className="glass-card-hover cursor-pointer flex items-center justify-center gap-2 px-5 py-3 text-white font-semibold"
           >
-            <RotateCcw className="w-4 h-4" /> Re-attempt Drill
+            <RotateCcw className="w-4 h-4" /> Try Again
           </button>
           <button 
             onClick={copyShareLink}
-            className="flex items-center justify-center gap-2 px-5 py-3 rounded-lg font-semibold bg-cyber-cyan/10 hover:bg-cyber-cyan/20 text-cyber-cyan border border-cyber-cyan/30 transition"
+            className="glass-card-hover cursor-pointer flex items-center justify-center gap-2 px-5 py-3 text-glass-accent font-semibold border-glass-accent/20"
           >
-            <Share2 className="w-4 h-4" /> {shareCopied ? 'Link Copied!' : 'Share Matrix Link'}
+            <Share2 className="w-4 h-4" /> {shareCopied ? 'Link Copied!' : 'Share Quiz Link'}
           </button>
         </div>
       </div>
@@ -147,23 +147,23 @@ export default function QuizTerminal({ quizData, quizId, userId }) {
   const alphabeticDesignations = ['A', 'B', 'C', 'D'];
 
   return (
-    <div className="w-full bg-cyber-obsidian border border-cyber-slate/30 rounded-xl p-5 max-w-2xl mx-auto shadow-2xl relative overflow-hidden">
+    <div className="glass-card p-6 max-w-2xl mx-auto shadow-glow animate-fade-in relative overflow-hidden">
       
       {/* Top HUD Header Status Track */}
-      <div className="flex justify-between items-center border-b border-cyber-slate/30 pb-3 mb-5">
-        <span className="font-mono text-xs text-cyber-cyan bg-cyber-cyan/5 border border-cyber-cyan/20 px-2.5 py-1 rounded-md">
-          QUESTION {currentIndex + 1} OF {quizData.length}
+      <div className="flex justify-between items-center border-b border-glass-border pb-3 mb-5">
+        <span className="glass-card !rounded-lg px-3 py-1.5 text-xs font-semibold text-glass-accent">
+          Question {currentIndex + 1} of {quizData.length}
         </span>
-        <div className="flex items-center gap-2 font-mono text-sm text-gray-300">
-          <Timer className="w-4 h-4 text-amber-400" />
+        <div className="flex items-center gap-2 text-sm text-gray-300">
+          <Timer className="w-4 h-4 text-glass-amber" />
           <span>{formatTime(timeSpent)}</span>
         </div>
       </div>
 
       {/* Progress Accents Navigation Bar */}
-      <div className="w-full h-1 bg-cyber-void rounded-full mb-6 overflow-hidden">
+      <div className="w-full h-1 bg-white/5 rounded-full mb-6 overflow-hidden">
         <div 
-          className="h-full bg-cyber-cyan transition-all duration-300"
+          className="h-full bg-gradient-to-r from-glass-accent to-glass-glow rounded-full transition-all duration-300"
           style={{ width: `${((currentIndex + 1) / quizData.length) * 100}%` }}
         />
       </div>
@@ -178,7 +178,8 @@ export default function QuizTerminal({ quizData, quizId, userId }) {
         {currentQuestion.options.map((option, idx) => {
           const letter = alphabeticDesignations[idx];
           
-          let optionStyles = "border-cyber-slate/30 bg-cyber-void/60 text-gray-300 hover:border-cyber-cyan/40 hover:bg-cyber-slate/20";
+          let optionStyles = "border-white/8 bg-white/[0.03] text-gray-300 hover:bg-white/[0.06] hover:border-glass-accent/20";
+          let badgeStyles = "bg-white/5 group-hover:bg-glass-accent/10 group-hover:text-glass-accent";
           let IconElement = null;
 
           if (isLocked) {
@@ -186,13 +187,16 @@ export default function QuizTerminal({ quizData, quizId, userId }) {
             const isCurrentSelected = idx === selectedOption;
 
             if (isCurrentCorrect) {
-              optionStyles = "border-cyber-emerald bg-cyber-emerald/10 text-cyber-emerald";
-              IconElement = <CheckCircle2 className="w-5 h-5 shrink-0 text-cyber-emerald" />;
+              optionStyles = "border-glass-success/40 bg-glass-success/10 text-glass-success shadow-glow-success";
+              badgeStyles = "bg-glass-success/20 text-glass-success";
+              IconElement = <CheckCircle2 className="w-5 h-5 shrink-0 text-glass-success" />;
             } else if (isCurrentSelected) {
-              optionStyles = "border-cyber-crimson bg-cyber-crimson/10 text-cyber-crimson";
-              IconElement = <XCircle className="w-5 h-5 shrink-0 text-cyber-crimson" />;
+              optionStyles = "border-glass-danger/40 bg-glass-danger/10 text-glass-danger shadow-glow-danger";
+              badgeStyles = "bg-glass-danger/20 text-glass-danger";
+              IconElement = <XCircle className="w-5 h-5 shrink-0 text-glass-danger" />;
             } else {
-              optionStyles = "border-cyber-slate/20 opacity-40 text-gray-500 cursor-not-allowed";
+              optionStyles = "border-white/5 opacity-30 text-gray-500 cursor-not-allowed";
+              badgeStyles = "bg-white/5 text-gray-500";
             }
           }
 
@@ -201,12 +205,10 @@ export default function QuizTerminal({ quizData, quizId, userId }) {
               key={idx}
               disabled={isLocked}
               onClick={() => handleOptionClick(idx)}
-              className={`w-full text-left p-4 rounded-xl border flex items-center justify-between font-sans transition-all duration-200 group ${optionStyles}`}
+              className={`w-full text-left p-4 rounded-xl border flex items-center justify-between transition-all duration-200 group ${optionStyles}`}
             >
               <div className="flex items-start gap-3">
-                <span className={`w-6 h-6 rounded-md flex items-center justify-center font-mono text-xs font-bold shrink-0 ${
-                  isLocked ? 'bg-black/20' : 'bg-cyber-slate group-hover:bg-cyber-cyan/10 group-hover:text-cyber-cyan'
-                }`}>
+                <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${badgeStyles}`}>
                   {letter}
                 </span>
                 <span className="text-sm md:text-base leading-tight pt-0.5">{option}</span>
@@ -219,8 +221,8 @@ export default function QuizTerminal({ quizData, quizId, userId }) {
 
       {/* Interactive Explanation Collapse Module */}
       {isLocked && (
-        <div className="bg-cyber-void/80 border border-cyber-slate/30 rounded-xl p-4 mb-6 animate-fadeIn">
-          <h4 className="font-mono text-xs text-cyber-cyan uppercase tracking-wider mb-1.5 font-bold">Examiner Rationale</h4>
+        <div className="glass-card p-4 mb-6 animate-fade-in">
+          <h4 className="text-glass-accent text-xs uppercase tracking-wider font-bold mb-1.5">Explanation</h4>
           <p className="text-xs md:text-sm text-gray-300 leading-relaxed">{currentQuestion.explanation}</p>
         </div>
       )}
@@ -229,9 +231,9 @@ export default function QuizTerminal({ quizData, quizId, userId }) {
       {isLocked && (
         <button
           onClick={handleNext}
-          className="w-full py-3.5 rounded-xl font-mono text-sm font-bold bg-cyber-cyan text-cyber-void hover:bg-cyan-400 active:scale-[0.99] transition shadow-[0_0_15px_rgba(6,182,212,0.2)]"
+          className="btn-gradient w-full py-3.5 text-sm"
         >
-          {currentIndex === quizData.length - 1 ? 'FINALIZE EXAM MATRIX' : 'FORWARD NEXT_'}
+          {currentIndex === quizData.length - 1 ? 'Finish Exam' : 'Next Question'}
         </button>
       )}
     </div>

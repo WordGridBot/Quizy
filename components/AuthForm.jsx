@@ -30,7 +30,7 @@ export default function AuthForm({ onAuthSuccess }) {
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || 'Authentication clearance failure');
+        throw new Error(data.error || 'Authentication failed');
       }
 
       if (data.success) {
@@ -44,77 +44,77 @@ export default function AuthForm({ onAuthSuccess }) {
   };
 
   return (
-    <div className="w-full max-w-sm mx-auto bg-cyber-obsidian border border-cyber-slate/30 rounded-xl p-6 shadow-2xl backdrop-blur-md">
+    <div className="w-full max-w-sm mx-auto glass-card p-8 shadow-glow animate-fade-in">
       <div className="text-center mb-6">
-        <h3 className="text-xl font-bold font-mono tracking-wider text-white">
-          {isLogin ? 'IDENTITY_VERIFICATION' : 'CREATE_NEW_CORE_NODE'}
+        <h3 className="text-xl font-semibold tracking-wide text-gradient">
+          {isLogin ? 'Sign In' : 'Create Account'}
         </h3>
-        <p className="text-xs text-gray-400 mt-1">
-          {isLogin ? 'Provide keys to synchronize dashboard analytics' : 'Deploy encrypted student node into system database'}
+        <p className="text-xs text-glass-muted mt-1.5">
+          {isLogin ? 'Access your personalized dashboard' : 'Set up your student profile'}
         </p>
       </div>
 
       {error && (
-        <div className="mb-4 p-3 rounded-lg bg-cyber-crimson/10 border border-cyber-crimson/30 flex items-center gap-2 text-xs text-cyber-crimson animate-fadeIn font-mono">
+        <div className="mb-4 p-3 rounded-lg glass-card !border-glass-danger/20 bg-glass-danger/5 flex items-center gap-2 text-xs text-glass-danger animate-fade-in">
           <ShieldAlert className="w-4 h-4 shrink-0" />
-          <span>{error.toUpperCase()}</span>
+          <span>{error}</span>
         </div>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {!isLogin && (
           <div className="relative">
-            <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+            <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-glass-muted" />
             <input
               type="text"
               required
               placeholder="Username"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-cyber-void border border-cyber-slate/40 text-sm text-gray-200 focus:outline-none focus:border-cyber-cyan transition"
+              className="glass-input pl-10 pr-4 py-3 w-full text-sm"
             />
           </div>
         )}
 
         <div className="relative">
-          <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+          <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-glass-muted" />
           <input
             type={isLogin ? "text" : "email"}
             required
             placeholder={isLogin ? "Username or Email" : "Email Address"}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-cyber-void border border-cyber-slate/40 text-sm text-gray-200 focus:outline-none focus:border-cyber-cyan transition"
+            className="glass-input pl-10 pr-4 py-3 w-full text-sm"
           />
         </div>
 
         <div className="relative">
-          <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+          <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-glass-muted" />
           <input
             type="password"
             required
-            placeholder="Password Secret Key"
+            placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-cyber-void border border-cyber-slate/40 text-sm text-gray-200 focus:outline-none focus:border-cyber-cyan transition"
+            className="glass-input pl-10 pr-4 py-3 w-full text-sm"
           />
         </div>
 
         <button
           type="submit"
           disabled={isLoading}
-          className="w-full py-3 mt-2 rounded-xl font-mono text-xs font-bold bg-cyber-cyan text-cyber-void hover:bg-cyan-400 disabled:opacity-50 transition uppercase tracking-wider"
+          className="btn-gradient w-full py-3 mt-2 text-sm tracking-wide disabled:opacity-50"
         >
-          {isLoading ? 'EXECUTING_HANDSHAKE...' : isLogin ? 'INITIATE_LOGIN' : 'REGISTER_NODE'}
+          {isLoading ? 'Signing in...' : isLogin ? 'Sign In' : 'Create Account'}
         </button>
       </form>
 
-      <div className="mt-5 text-center border-t border-cyber-slate/20 pt-4">
+      <div className="mt-5 text-center border-t border-glass-border pt-4">
         <button
           onClick={() => { setIsLogin(!isLogin); setError(''); }}
-          className="text-xs font-mono text-gray-400 hover:text-cyber-cyan transition underline underline-offset-4"
+          className="text-xs text-glass-muted hover:text-glass-accent transition-colors"
         >
-          {isLogin ? 'SWITCH_MODE // DEPLOY_ACCOUNT' : 'SWITCH_MODE // AUTHORIZE_EXISTING'}
+          {isLogin ? 'Need an account? Sign up' : 'Already have an account? Sign in'}
         </button>
       </div>
     </div>

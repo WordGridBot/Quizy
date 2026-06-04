@@ -6,34 +6,220 @@
   color-scheme: dark;
 }
 
+/* ==========================================
+   BASE DOCUMENT STYLES
+   ========================================== */
 body {
-  background-color: #030712; /* Matches cyber.void */
-  color: #f3f4f6; /* Clean off-white text */
-  font-family: var(--font-inter), sans-serif;
+  background-color: #0a0a1a;
+  color: #e2e8f0;
+  font-family: var(--font-inter), system-ui, sans-serif;
   overflow-x: hidden;
 }
 
-/* Custom Cyber Minimalist Scrollbar Configuration */
+/* ==========================================
+   GLASSMORPHIC UTILITY CLASSES
+   ========================================== */
+@layer components {
+  .glass-card {
+    background: rgba(255, 255, 255, 0.04);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 1rem;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  }
+
+  .glass-card-hover {
+    background: rgba(255, 255, 255, 0.04);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 1rem;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    transition: all 0.3s ease;
+  }
+
+  .glass-card-hover:hover {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(129, 140, 248, 0.2);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), 0 0 20px rgba(129, 140, 248, 0.08);
+    transform: translateY(-2px);
+  }
+
+  .glass-input {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 0.75rem;
+    color: #e2e8f0;
+    transition: all 0.2s ease;
+  }
+
+  .glass-input:focus {
+    outline: none;
+    border-color: rgba(129, 140, 248, 0.4);
+    box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.1), 0 0 16px rgba(129, 140, 248, 0.06);
+  }
+
+  .glass-input::placeholder {
+    color: #64748b;
+  }
+
+  .btn-gradient {
+    background: linear-gradient(135deg, #818cf8, #a78bfa, #c084fc);
+    color: #0a0a1a;
+    font-weight: 700;
+    border-radius: 0.75rem;
+    transition: all 0.25s ease;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .btn-gradient:hover {
+    box-shadow: 0 0 24px rgba(129, 140, 248, 0.35);
+    transform: translateY(-1px);
+  }
+
+  .btn-gradient:active {
+    transform: scale(0.98);
+  }
+
+  .btn-gradient:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+  }
+
+  .text-gradient {
+    background: linear-gradient(135deg, #818cf8, #c084fc);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+}
+
+/* ==========================================
+   AMBIENT PLASMA BACKGROUND BLOBS
+   ========================================== */
+.ambient-blob {
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(80px);
+  pointer-events: none;
+  z-index: 0;
+  will-change: transform;
+}
+
+.blob-1 {
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, rgba(129, 140, 248, 0.15) 0%, transparent 70%);
+  top: -10%;
+  left: -5%;
+  animation: float 8s ease-in-out infinite;
+}
+
+.blob-2 {
+  width: 400px;
+  height: 400px;
+  background: radial-gradient(circle, rgba(192, 132, 252, 0.12) 0%, transparent 70%);
+  top: 40%;
+  right: -8%;
+  animation: float 6s ease-in-out infinite 2s;
+}
+
+.blob-3 {
+  width: 350px;
+  height: 350px;
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.1) 0%, transparent 70%);
+  bottom: -5%;
+  left: 30%;
+  animation: float 7s ease-in-out infinite 4s;
+}
+
+/* Scanning active state — blobs intensify */
+.blob-active .blob-1 {
+  background: radial-gradient(circle, rgba(52, 211, 153, 0.2) 0%, transparent 70%);
+  animation-duration: 4s;
+}
+
+.blob-active .blob-2 {
+  background: radial-gradient(circle, rgba(52, 211, 153, 0.15) 0%, transparent 70%);
+  animation-duration: 3s;
+}
+
+.blob-active .blob-3 {
+  background: radial-gradient(circle, rgba(110, 231, 183, 0.12) 0%, transparent 70%);
+  animation-duration: 3.5s;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px) scale(1); }
+  50%      { transform: translateY(-20px) scale(1.05); }
+}
+
+/* ==========================================
+   GLASSMORPHIC SCROLLBAR
+   ========================================== */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #030712;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1f2937;
+  background: rgba(255, 255, 255, 0.1);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #06b6d4; /* Glows cyan on hover */
+  background: rgba(129, 140, 248, 0.3);
 }
 
-/* Custom selection highlight */
+/* ==========================================
+   SELECTION HIGHLIGHT
+   ========================================== */
 ::selection {
-  background-color: rgba(6, 182, 212, 0.2);
-  color: #06b6d4;
+  background-color: rgba(129, 140, 248, 0.25);
+  color: #c7d2fe;
+}
+
+/* ==========================================
+   ADDITIONAL ANIMATIONS
+   ========================================== */
+@keyframes pulseGlow {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50%      { opacity: 0.8; transform: scale(1.1); }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes fadeIn {
+  0%   { opacity: 0; transform: translateY(8px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideUp {
+  0%   { opacity: 0; transform: translateY(24px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+/* ==========================================
+   RADAR PULSE RING (HeroOrb fallback)
+   ========================================== */
+@keyframes radarSweep {
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes radarPing {
+  0%   { transform: scale(0.8); opacity: 0.6; }
+  50%  { transform: scale(1); opacity: 1; }
+  100% { transform: scale(0.8); opacity: 0.6; }
 }

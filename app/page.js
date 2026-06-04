@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Upload, BookOpen, Award, LogOut, FileText, CheckCircle2 } from 'lucide-react';
-import ThreeCanvas from '@/components/ThreeCanvas';
+import { Upload, BookOpen, Award, LogOut, FileText, CheckCircle2, Clock, TrendingUp } from 'lucide-react';
+import HeroOrb from '@/components/HeroOrb';
 import QuizTerminal from '@/components/QuizTerminal';
 import VocabVault from '@/components/VocabVault';
 import AuthForm from '@/components/AuthForm';
@@ -60,7 +60,7 @@ export default function DashboardPage() {
     const file = e.target.files[0];
     if (!file) return;
 
-    setUploadStatus('Converting file parameters...');
+    setUploadStatus('Converting file...');
     setIsScanning(true);
 
     const reader = new FileReader();
@@ -68,7 +68,7 @@ export default function DashboardPage() {
     reader.onloadend = async () => {
       const base64RawString = reader.result.split(',')[1];
 
-      setUploadStatus('Executing dual-AI processing chains...');
+      setUploadStatus('Running AI analysis pipeline...');
       try {
         const res = await fetch('/app/api/analyze', { // adjusted route string to map local API path
           method: 'POST',
@@ -82,7 +82,7 @@ export default function DashboardPage() {
 
         setGeneratedQuiz(data.quizData);
         setCurrentQuizId(data.quizId);
-        setUploadStatus('Data extraction successfully committed.');
+        setUploadStatus('Analysis complete — quiz generated successfully.');
         
         // Refresh local cache metrics
         fetchHistoryAndVault();
@@ -104,11 +104,21 @@ export default function DashboardPage() {
     window.location.reload();
   };
 
+  // Tab configuration
+  const tabs = [
+    { id: 'terminal', label: 'Test Center' },
+    { id: 'vault', label: 'Vocab Vault' },
+    { id: 'metrics', label: 'History' },
+  ];
+
   // Hydration protection loader screen
   if (!authChecked) {
     return (
-      <div className="min-h-screen bg-cyber-void flex items-center justify-center font-mono text-sm text-cyber-cyan">
-        SYNCHRONIZING_CORE_SYSTEM_VARIABLES...
+      <div className="min-h-screen bg-glass-deep flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-10 h-10 border-2 border-glass-accent/20 border-t-glass-accent rounded-full animate-spin" />
+          <span className="text-sm text-glass-muted">Loading CGL Core...</span>
+        </div>
       </div>
     );
   }
@@ -116,12 +126,15 @@ export default function DashboardPage() {
   // Enforce profile lock-in views if unauthenticated
   if (!user) {
     return (
-      <div className="min-h-screen bg-cyber-void flex items-center justify-center px-4 py-12 relative">
+      <div className="min-h-screen bg-glass-deep flex items-center justify-center px-4 py-12 relative">
+        {/* Logo header */}
         <div className="absolute top-12 left-1/2 -translate-x-1/2 text-center select-none pointer-events-none">
-          <h1 className="text-3xl font-extrabold font-mono text-white tracking-widest bg-clip-text bg-gradient-to-r from-white to-gray-500">
-            CGL CORE 3D
+          <h1 className="text-3xl font-extrabold tracking-wider text-gradient">
+            CGL Core
           </h1>
-          <p className="text-xs font-mono text-cyber-cyan/50 uppercase tracking-widest mt-2">TCS Pattern Revision Node v2.6</p>
+          <p className="text-xs text-glass-muted/60 uppercase tracking-[0.25em] mt-2">
+            AI-Powered Exam Revision
+          </p>
         </div>
         <AuthForm onAuthSuccess={(profile) => { setUser(profile); fetchHistoryAndVault(); }} />
       </div>
@@ -129,44 +142,42 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-cyber-void text-gray-200 pb-12 flex flex-col">
+    <div className="min-h-screen bg-glass-deep text-gray-200 pb-12 flex flex-col">
       
       {/* ==========================================
-          GLOBAL TOP NAVIGATION HEAD-UP DISPLAY (HUD)
+          GLASSMORPHIC NAVIGATION HEADER
           ========================================== */}
-      <header className="w-full bg-cyber-obsidian/70 backdrop-blur-md border-b border-cyber-slate/30 px-4 md:px-8 py-4 flex flex-col sm:flex-row items-center justify-between gap-4 sticky top-0 z-50">
+      <header className="w-full glass-card !rounded-none !border-x-0 !border-t-0 px-4 md:px-8 py-4 flex flex-col sm:flex-row items-center justify-between gap-4 sticky top-0 z-50">
         <div className="flex items-center gap-3">
-          <div className="w-3 h-3 rounded-full bg-cyber-cyan animate-pulse" />
-          <h1 className="text-xl font-black font-mono tracking-wider text-white">CGL_CORE_3D_MATRIX</h1>
+          <div className="w-2.5 h-2.5 rounded-full bg-glass-accent animate-pulse" />
+          <h1 className="text-lg font-bold tracking-wider text-gradient">CGL Core</h1>
         </div>
 
-        <nav className="flex items-center gap-1 bg-cyber-void border border-cyber-slate/40 p-1 rounded-xl">
-          <button 
-            onClick={() => setActiveTab('terminal')}
-            className={`px-4 py-1.5 rounded-lg font-mono text-xs font-bold transition ${activeTab === 'terminal' ? 'bg-cyber-cyan text-cyber-void' : 'text-gray-400 hover:text-white'}`}
-          >
-            TEST_CENTER
-          </button>
-          <button 
-            onClick={() => setActiveTab('vault')}
-            className={`px-4 py-1.5 rounded-lg font-mono text-xs font-bold transition ${activeTab === 'vault' ? 'bg-cyber-cyan text-cyber-void' : 'text-gray-400 hover:text-white'}`}
-          >
-            VOCAB_VAULT
-          </button>
-          <button 
-            onClick={() => setActiveTab('metrics')}
-            className={`px-4 py-1.5 rounded-lg font-mono text-xs font-bold transition ${activeTab === 'metrics' ? 'bg-cyber-cyan text-cyber-void' : 'text-gray-400 hover:text-white'}`}
-          >
-            HISTORY_LOGS
-          </button>
+        {/* Tab Navigation */}
+        <nav className="flex items-center gap-1 glass-card !p-1 !rounded-xl">
+          {tabs.map((tab) => (
+            <button 
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all duration-200 ${
+                activeTab === tab.id 
+                  ? 'btn-gradient !rounded-lg shadow-glow' 
+                  : 'text-glass-muted hover:text-white hover:bg-white/[0.04]'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </nav>
 
         <div className="flex items-center gap-4">
-          <span className="font-mono text-xs text-gray-400">OPERATOR: <span className="text-white font-bold">{user.username.toUpperCase()}</span></span>
+          <span className="text-xs text-glass-muted">
+            Welcome, <span className="text-white font-semibold">{user.username}</span>
+          </span>
           <button 
             onClick={handleLogout}
-            className="p-2 rounded-lg bg-cyber-slate/40 hover:bg-cyber-crimson/10 text-gray-400 hover:text-cyber-crimson transition border border-cyber-slate/30"
-            title="Disconnect Profile Session"
+            className="p-2 rounded-lg bg-white/[0.04] hover:bg-glass-danger/10 text-glass-muted hover:text-glass-danger transition border border-white/[0.06] hover:border-glass-danger/20"
+            title="Sign out"
           >
             <LogOut className="w-4 h-4" />
           </button>
@@ -178,44 +189,56 @@ export default function DashboardPage() {
           ========================================== */}
       <div className="flex-grow max-w-7xl w-full mx-auto px-4 md:px-8 mt-8">
         
-        {/* VIEW 1: CENTRAL COMMAND & UPLOAD ENGINE */}
+        {/* VIEW 1: TEST CENTER & UPLOAD ENGINE */}
         {activeTab === 'terminal' && (
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 items-start">
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 items-start animate-fade-in">
             
-            {/* Left Side: Glowing 3D Hologram Interface Canvas */}
-            <div className="lg:col-span-2 space-y-4">
-              <ThreeCanvas isScanning={isScanning} />
+            {/* Left Side: Animated Hero Orb & Upload Panel */}
+            <div className="lg:col-span-2 space-y-5">
+              <HeroOrb isScanning={isScanning} />
               
-              {/* File Drop Field Panel */}
-              <div className="bg-cyber-obsidian border border-cyber-slate/30 p-5 rounded-xl backdrop-blur-sm">
-                <h3 className="font-mono text-sm font-bold tracking-wide text-white mb-2 uppercase">Ingest Revision Material</h3>
-                <p className="text-xs text-gray-400 leading-normal mb-4">Upload handwritten flash sheets, textbook pages, or vocabulary lists. Our system will analyze the data structure to build tests.</p>
+              {/* File Upload Panel */}
+              <div className="glass-card p-6">
+                <h3 className="text-sm font-bold tracking-wide text-white mb-1.5">Upload Study Material</h3>
+                <p className="text-xs text-glass-muted leading-relaxed mb-4">
+                  Drop handwritten notes, textbook photos, or vocabulary lists. Our AI will analyze and generate targeted exam questions.
+                </p>
                 
-                <label className={`w-full h-32 border-2 border-dashed rounded-xl flex flex-col items-center justify-center gap-2 cursor-pointer transition ${
-                  isScanning ? 'border-cyber-emerald bg-cyber-emerald/5 opacity-50 pointer-events-none' : 'border-cyber-slate/40 bg-cyber-void/50 hover:border-cyber-cyan/40 hover:bg-cyber-slate/10'
+                <label className={`w-full h-32 border-2 border-dashed rounded-xl flex flex-col items-center justify-center gap-2 cursor-pointer transition-all duration-300 ${
+                  isScanning 
+                    ? 'border-glass-success/30 bg-glass-success/5 opacity-60 pointer-events-none' 
+                    : 'border-white/10 bg-white/[0.02] hover:border-glass-accent/30 hover:bg-white/[0.04] hover:shadow-glow'
                 }`}>
-                  <Upload className={`w-8 h-8 ${isScanning ? 'text-cyber-emerald animate-bounce' : 'text-gray-500'}`} />
-                  <span className="font-mono text-xs text-gray-400">SELECT_STUDY_IMAGE</span>
+                  <Upload className={`w-8 h-8 ${isScanning ? 'text-glass-success animate-bounce' : 'text-white/25'}`} />
+                  <span className="text-xs text-glass-muted font-medium">
+                    {isScanning ? 'Processing...' : 'Select an image'}
+                  </span>
                   <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={isScanning} />
                 </label>
 
                 {uploadStatus && (
-                  <p className="mt-3 font-mono text-[11px] text-cyber-cyan bg-cyber-cyan/5 border border-cyber-cyan/10 p-2.5 rounded-lg text-center animate-pulse">
-                    {uploadStatus.toUpperCase()}
-                  </p>
+                  <div className="mt-3 glass-card !rounded-lg p-3 text-center">
+                    <p className="text-xs text-glass-accent font-medium animate-pulse">
+                      {uploadStatus}
+                    </p>
+                  </div>
                 )}
               </div>
             </div>
 
-            {/* Right Side: Render Live Testing Core Engine Output */}
+            {/* Right Side: Live Testing Engine Output */}
             <div className="lg:col-span-3">
               {generatedQuiz ? (
                 <QuizTerminal quizData={generatedQuiz} quizId={currentQuizId} userId={user.id} />
               ) : (
-                <div className="w-full h-[540px] border border-dashed border-cyber-slate/20 rounded-xl flex flex-col items-center justify-center text-center p-6 bg-cyber-obsidian/10 backdrop-blur-sm">
-                  <FileText className="w-12 h-12 text-gray-600 mb-4" />
-                  <h3 className="font-mono text-base text-gray-400 uppercase tracking-wide">NO_ACTIVE_EXAM_MATRIX</h3>
-                  <p className="text-xs text-gray-500 max-w-xs mt-2 leading-relaxed">Provide an image compilation sheet on the interface pipeline terminal to generate a targeted TCS exam module.</p>
+                <div className="w-full h-[540px] glass-card flex flex-col items-center justify-center text-center p-8">
+                  <div className="w-16 h-16 rounded-2xl bg-white/[0.03] border border-white/[0.06] flex items-center justify-center mb-5">
+                    <FileText className="w-7 h-7 text-white/15" />
+                  </div>
+                  <h3 className="text-base font-semibold text-white/60 mb-2">No Active Exam</h3>
+                  <p className="text-sm text-glass-muted max-w-xs leading-relaxed">
+                    Upload a study image to generate a TCS-pattern mock exam with AI-powered question analysis.
+                  </p>
                 </div>
               )}
             </div>
@@ -223,47 +246,61 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* VIEW 2: CENTRAL DICTIONARY DIAL repository */}
+        {/* VIEW 2: VOCABULARY VAULT */}
         {activeTab === 'vault' && (
-          <div className="animate-fadeIn">
+          <div className="animate-fade-in">
             <VocabVault vocabularyItems={vaultWords} />
           </div>
         )}
 
-        {/* VIEW 3: HISTORICAL SCORES MATRIX CHART DISPLAY */}
+        {/* VIEW 3: HISTORICAL EXAM LOGS */}
         {activeTab === 'metrics' && (
-          <div className="bg-cyber-obsidian border border-cyber-slate/30 p-6 rounded-xl backdrop-blur-md max-w-4xl mx-auto animate-fadeIn">
-            <div className="flex items-center gap-2 mb-6 border-b border-cyber-slate/30 pb-4">
-              <Award className="w-6 h-6 text-cyber-cyan" />
+          <div className="glass-card p-6 md:p-8 max-w-4xl mx-auto animate-fade-in">
+            <div className="flex items-center gap-3 mb-6 border-b border-white/[0.06] pb-5">
+              <div className="w-10 h-10 rounded-xl bg-glass-accent/10 border border-glass-accent/20 flex items-center justify-center">
+                <Award className="w-5 h-5 text-glass-accent" />
+              </div>
               <div>
-                <h3 className="text-xl font-bold font-mono tracking-wide text-white">HISTORICAL EXAM ANALYSIS LOGS</h3>
-                <p className="text-xs text-gray-400 mt-0.5">Chronological records of completed review runs</p>
+                <h3 className="text-xl font-bold text-white">Exam History</h3>
+                <p className="text-xs text-glass-muted mt-0.5">Your past mock exam attempts and performance</p>
               </div>
             </div>
 
             {historicalLogs.length === 0 ? (
-              <div className="text-center py-16 text-gray-500 font-mono text-sm">
-                ZERO_HISTORICAL_ATTEMPTS_RECORDED
+              <div className="text-center py-16">
+                <div className="w-14 h-14 rounded-2xl bg-white/[0.03] border border-white/[0.06] flex items-center justify-center mx-auto mb-4">
+                  <TrendingUp className="w-6 h-6 text-white/15" />
+                </div>
+                <p className="text-sm text-glass-muted">No exam attempts recorded yet</p>
+                <p className="text-xs text-white/20 mt-1">Complete a mock exam to see your stats here</p>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {historicalLogs.map((log, index) => (
-                  <div key={log.logId || index} className="w-full bg-cyber-void border border-cyber-slate/40 p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-cyber-slate/60 transition">
+                  <div key={log.logId || index} className="glass-card-hover p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div className="flex items-start gap-3">
-                      <CheckCircle2 className="w-5 h-5 text-cyber-emerald shrink-0 mt-0.5" />
+                      <div className="w-8 h-8 rounded-lg bg-glass-success/10 border border-glass-success/20 flex items-center justify-center shrink-0 mt-0.5">
+                        <CheckCircle2 className="w-4 h-4 text-glass-success" />
+                      </div>
                       <div>
-                        <h4 className="text-sm font-bold font-mono text-white">MOCK ID: {String(log.quizId).substring(0, 12).toUpperCase()}...</h4>
-                        <p className="text-xs text-gray-500 mt-1 font-sans">Attempt Finished on {log.dateString}</p>
+                        <h4 className="text-sm font-semibold text-white">
+                          Quiz {String(log.quizId).substring(0, 8).toUpperCase()}
+                        </h4>
+                        <p className="text-xs text-glass-muted mt-0.5">{log.dateString}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-6 text-right">
-                      <div className="font-mono">
-                        <span className="text-[10px] uppercase text-gray-500 block mb-0.5">Speed Log</span>
-                        <span className="text-sm text-amber-400 font-bold">{log.speedMinutes} min</span>
+                      <div>
+                        <span className="text-[10px] uppercase text-glass-muted block mb-0.5 tracking-wider">Speed</span>
+                        <span className="text-sm text-glass-amber font-bold flex items-center gap-1">
+                          <Clock className="w-3 h-3" /> {log.speedMinutes} min
+                        </span>
                       </div>
-                      <div className="font-mono">
-                        <span className="text-[10px] uppercase text-gray-500 block mb-0.5">Precision</span>
-                        <span className={`text-base font-black ${log.accuracy >= 70 ? 'text-cyber-emerald' : 'text-cyber-cyan'}`}>{log.accuracy}%</span>
+                      <div>
+                        <span className="text-[10px] uppercase text-glass-muted block mb-0.5 tracking-wider">Accuracy</span>
+                        <span className={`text-base font-black ${log.accuracy >= 70 ? 'text-glass-success' : 'text-glass-accent'}`}>
+                          {log.accuracy}%
+                        </span>
                       </div>
                     </div>
                   </div>
