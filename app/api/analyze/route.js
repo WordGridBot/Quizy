@@ -15,7 +15,7 @@ const client = new MongoClient(process.env.MONGODB_URI);
 
 export async function POST(request) {
   try {
-    const { imageBase64, userId } = await request.json();
+    const { imageBase64, userId, examType = 'SSC CGL', subject = 'Mixed', questionCount = 5 } = await request.json();
 
     if (!imageBase64) {
       return NextResponse.json({ error: "No image provided" }, { status: 400 });
@@ -48,9 +48,9 @@ export async function POST(request) {
     // --- PIPELINE STEP 2: JSON Processing & MCQ Generation ---
     // We pass the raw text to an elite reasoning model to generate the structured CGL material
     const generatorSystemPrompt = `
-      You are an expert SSC CGL Content Generator. Review the following raw textbook/note data and perform two tasks:
-      1. Extract all high-priority English vocabulary words or advanced GS facts found.
-      2. Construct exactly 5 tough Multiple Choice Questions (MCQs) mimicking the TCS examination style based strictly on the text.
+      You are an expert ${examType} Content Generator. Review the following raw textbook/note data and perform two tasks:
+      1. Extract all high-priority English vocabulary words or advanced facts found.
+      2. Construct exactly ${Number(questionCount)} tough Multiple Choice Questions (MCQs) mimicking the TCS examination style for the subject/section "${subject}" based strictly on the text.
       
       You must respond ONLY with a raw, valid JSON object following this exact syntax blueprint:
       {
@@ -84,11 +84,15 @@ export async function POST(request) {
     await client.connect();
     const db = client.db('cgl_core_db');
 
-    // Store the quiz master document
+    // Store the quiz master document with image and metadata parameters
     const quizDoc = await db.collection('quizzes').insertOne({
       creatorId: userId || 'anonymous',
       createdAt: new Date(),
       questions: structuredOutput.quiz,
+      imageBase64: imageBase64,
+      examType: examType,
+      subject: subject,
+      questionCount: Number(questionCount),
       sharedWith: []
     });
 

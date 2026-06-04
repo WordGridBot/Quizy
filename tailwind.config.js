@@ -9,16 +9,16 @@ module.exports = {
     extend: {
       colors: {
         glass: {
-          deep:    "#0a0a1a",     // Rich indigo-black base canvas
-          surface: "#ffffff08",   // Frosted card fill (white 3%)
-          border:  "#ffffff18",   // Translucent glass edge (white 9%)
-          hover:   "#ffffff12",   // Subtle hover lift
-          accent:  "#818cf8",     // Primary indigo-violet accent
-          glow:    "#c084fc",     // Secondary purple glow
-          success: "#34d399",     // Correct / positive states
-          danger:  "#fb7185",     // Incorrect / error states
-          amber:   "#fbbf24",     // Timer / speed / rank highlights
-          muted:   "#94a3b8",     // De-emphasized text
+          deep:    "#000000",     // Pitch black canvas
+          surface: "#09090b",     // Sleek dark grey card fill
+          border:  "#18181b",     // Thin slate border
+          hover:   "#141416",     // Subtle hover state
+          accent:  "#ffffff",     // Premium white accent for primary actions
+          glow:    "#27272a",     // Cool grey border highlight
+          success: "#10b981",     // Clean Emerald correct/positive states
+          danger:  "#ef4444",     // Clean Ruby incorrect/error states
+          amber:   "#f59e0b",     // Timer/speed highlights
+          muted:   "#88888f",     // De-emphasized secondary text
         },
       },
       fontFamily: {

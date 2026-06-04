@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Upload, BookOpen, Award, LogOut, FileText, CheckCircle2, Clock, TrendingUp } from 'lucide-react';
-import HeroOrb from '@/components/HeroOrb';
+import { Upload, BookOpen, Award, LogOut, FileText, CheckCircle2, Clock, TrendingUp, Shuffle, Eye, X, Sliders, Check } from 'lucide-react';
 import QuizTerminal from '@/components/QuizTerminal';
 import VocabVault from '@/components/VocabVault';
 import AuthForm from '@/components/AuthForm';
@@ -20,8 +19,19 @@ export default function DashboardPage() {
   // Loaded engine data blocks
   const [generatedQuiz, setGeneratedQuiz] = useState(null);
   const [currentQuizId, setCurrentQuizId] = useState(null);
+  const [quizImageBase64, setQuizImageBase64] = useState(null);
+  const [quizImagesBase64, setQuizImagesBase64] = useState(null);
   const [vaultWords, setVaultWords] = useState([]);
   const [historicalLogs, setHistoricalLogs] = useState([]);
+  const [createdQuizzes, setCreatedQuizzes] = useState([]);
+
+  // Advanced feature inputs
+  const [examType, setExamType] = useState('SSC CGL');
+  const [subject, setSubject] = useState('Mixed');
+  const [questionCount, setQuestionCount] = useState(5);
+  const [selectedQuizzes, setSelectedQuizzes] = useState([]);
+  const [isMixing, setIsMixing] = useState(false);
+  const [notesPreviewImage, setNotesPreviewImage] = useState(null);
 
   // 1. Lifecycle verification: Check if session cookie is active on load
   useEffect(() => {
@@ -42,17 +52,67 @@ export default function DashboardPage() {
     verifySession();
   }, []);
 
-  // 2. Fetch User History and Words Vault from DB
+  // 2. Fetch User History, Quizzes and Words Vault from DB
   const fetchHistoryAndVault = async () => {
     try {
       const scoreRes = await fetch('/api/scores');
       if (scoreRes.ok) {
         const scoreData = await scoreRes.json();
         setHistoricalLogs(scoreData.history || []);
+        setCreatedQuizzes(scoreData.createdQuizzes || []);
+      }
+
+      const vocabRes = await fetch('/api/vocab');
+      if (vocabRes.ok) {
+        const vocabData = await vocabRes.json();
+        setVaultWords(vocabData.vocabWords || []);
       }
     } catch (err) {
       console.error("Failed to sync background metrics profiles:", err);
     }
+  };
+
+  // Client-side image compression utility
+  const compressImage = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target.result;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const MAX_WIDTH = 1200;
+          const MAX_HEIGHT = 1200;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height = Math.round((height * MAX_WIDTH) / width);
+              width = MAX_WIDTH;
+            }
+          } else {
+            if (height > MAX_HEIGHT) {
+              width = Math.round((width * MAX_HEIGHT) / height);
+              height = MAX_HEIGHT;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // Get compressed data URL (JPEG, 0.75 quality for database efficiency)
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.75);
+          const base64 = compressedDataUrl.split(',')[1];
+          resolve(base64);
+        };
+        img.onerror = (err) => reject(err);
+      };
+      reader.onerror = (err) => reject(err);
+    });
   };
 
   // 3. Handle File Upload conversion and dispatch pipeline execution
@@ -60,64 +120,120 @@ export default function DashboardPage() {
     const file = e.target.files[0];
     if (!file) return;
 
-    setUploadStatus('Converting file...');
+    setUploadStatus('Compressing image for processing...');
     setIsScanning(true);
 
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onloadend = async () => {
-      const base64RawString = reader.result.split(',')[1];
+    try {
+      const base64RawString = await compressImage(file);
 
-      setUploadStatus('Running AI analysis pipeline...');
-      try {
-        const res = await fetch('/app/api/analyze', { // adjusted route string to map local API path
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageBase64: base64RawString, userId: user?.id })
-        });
-        
-        const data = await res.json();
-        
-        if (!res.ok) throw new Error(data.error || 'Pipeline parsing breakdown');
+      setUploadStatus('Running AI analysis pipeline (OCR + Synth)...');
+      
+      const res = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          imageBase64: base64RawString, 
+          userId: user?.id,
+          examType,
+          subject,
+          questionCount
+        })
+      });
+      
+      const data = await res.json();
+      
+      if (!res.ok) throw new Error(data.error || 'Pipeline parsing breakdown');
 
-        setGeneratedQuiz(data.quizData);
-        setCurrentQuizId(data.quizId);
-        setUploadStatus('Analysis complete — quiz generated successfully.');
-        
-        // Refresh local cache metrics
-        fetchHistoryAndVault();
-      } catch (err) {
-        setUploadStatus(`Error: ${err.message}`);
-      } finally {
-        setIsScanning(false);
-      }
-    };
+      setGeneratedQuiz(data.quizData);
+      setCurrentQuizId(data.quizId);
+      setQuizImageBase64(base64RawString);
+      setQuizImagesBase64(null); // Reset mixed images
+      setUploadStatus('Analysis complete — quiz generated successfully.');
+      
+      // Refresh local cache metrics
+      fetchHistoryAndVault();
+    } catch (err) {
+      setUploadStatus(`Error: ${err.message}`);
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
+  // Load a quiz to retake it
+  const handleLoadQuiz = async (quizId, quizImage, quizImages) => {
+    setUploadStatus('Loading quiz questions...');
+    try {
+      const res = await fetch(`/api/quizzes/${quizId}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to pull shared quiz');
+
+      setGeneratedQuiz(data.questions);
+      setCurrentQuizId(data.quizId);
+      setQuizImageBase64(data.imageBase64 || quizImage);
+      setQuizImagesBase64(data.imagesBase64 || quizImages);
+      setUploadStatus('');
+      setActiveTab('terminal');
+    } catch (err) {
+      alert(`Error loading quiz: ${err.message}`);
+    }
+  };
+
+  // Mix selected quizzes
+  const handleMixQuizzes = async () => {
+    if (selectedQuizzes.length < 2) return;
+    setIsMixing(true);
+    setUploadStatus('Combining quiz databases and shuffling questions...');
+
+    try {
+      const res = await fetch('/api/quizzes/mix', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quizIds: selectedQuizzes })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Mix pipeline failed');
+
+      // Load mixed quiz
+      await handleLoadQuiz(data.quizId, null, null);
+      setSelectedQuizzes([]);
+    } catch (err) {
+      alert(`Error mixing quizzes: ${err.message}`);
+    } finally {
+      setIsMixing(false);
+    }
+  };
+
+  // Toggle quiz selection for mixer
+  const handleSelectQuiz = (quizId) => {
+    setSelectedQuizzes(prev => 
+      prev.includes(quizId) 
+        ? prev.filter(id => id !== quizId) 
+        : [...prev, quizId]
+    );
   };
 
   // 4. Reset Session logs out handler
   const handleLogout = () => {
-    // Clear out session memory
     setUser(null);
     setGeneratedQuiz(null);
-    // Explicitly overwrite token parameters via header resets by forcing reload
     document.cookie = "cgl_session_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
     window.location.reload();
   };
 
   // Tab configuration
   const tabs = [
-    { id: 'terminal', label: 'Test Center' },
+    { id: 'terminal', label: 'Testing Portal' },
     { id: 'vault', label: 'Vocab Vault' },
-    { id: 'metrics', label: 'History' },
+    { id: 'metrics', label: 'Quiz Repository' },
   ];
 
   // Hydration protection loader screen
   if (!authChecked) {
     return (
-      <div className="min-h-screen bg-glass-deep flex items-center justify-center">
+      <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-10 h-10 border-2 border-glass-accent/20 border-t-glass-accent rounded-full animate-spin" />
-          <span className="text-sm text-glass-muted">Loading CGL Core...</span>
+          <div className="w-8 h-8 border-2 border-zinc-700 border-t-white rounded-full animate-spin" />
+          <span className="text-xs text-zinc-500 font-mono">Loading CGL Core...</span>
         </div>
       </div>
     );
@@ -126,14 +242,13 @@ export default function DashboardPage() {
   // Enforce profile lock-in views if unauthenticated
   if (!user) {
     return (
-      <div className="min-h-screen bg-glass-deep flex items-center justify-center px-4 py-12 relative">
-        {/* Logo header */}
+      <div className="min-h-screen bg-black flex items-center justify-center px-4 py-12 relative">
         <div className="absolute top-12 left-1/2 -translate-x-1/2 text-center select-none pointer-events-none">
-          <h1 className="text-3xl font-extrabold tracking-wider text-gradient">
+          <h1 className="text-2xl font-bold tracking-wider text-white">
             CGL Core
           </h1>
-          <p className="text-xs text-glass-muted/60 uppercase tracking-[0.25em] mt-2">
-            AI-Powered Exam Revision
+          <p className="text-[10px] text-zinc-600 uppercase tracking-[0.25em] mt-1.5 font-semibold">
+            Competitive Exam Revision Engine
           </p>
         </div>
         <AuthForm onAuthSuccess={(profile) => { setUser(profile); fetchHistoryAndVault(); }} />
@@ -142,27 +257,27 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-glass-deep text-gray-200 pb-12 flex flex-col">
+    <div className="min-h-screen bg-black text-zinc-300 pb-16 flex flex-col font-sans selection:bg-zinc-800 selection:text-white">
       
       {/* ==========================================
-          GLASSMORPHIC NAVIGATION HEADER
+          PREMIUM HEADER
           ========================================== */}
-      <header className="w-full glass-card !rounded-none !border-x-0 !border-t-0 px-4 md:px-8 py-4 flex flex-col sm:flex-row items-center justify-between gap-4 sticky top-0 z-50">
-        <div className="flex items-center gap-3">
-          <div className="w-2.5 h-2.5 rounded-full bg-glass-accent animate-pulse" />
-          <h1 className="text-lg font-bold tracking-wider text-gradient">CGL Core</h1>
+      <header className="w-full bg-zinc-950 border-b border-zinc-900 px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4 sticky top-0 z-50">
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
+          <h1 className="text-base font-bold tracking-wider text-white">CGL Core</h1>
         </div>
 
         {/* Tab Navigation */}
-        <nav className="flex items-center gap-1 glass-card !p-1 !rounded-xl">
+        <nav className="flex items-center gap-0.5 bg-zinc-900 p-0.5 rounded-lg border border-zinc-800">
           {tabs.map((tab) => (
             <button 
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all duration-200 ${
+              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition ${
                 activeTab === tab.id 
-                  ? 'btn-gradient !rounded-lg shadow-glow' 
-                  : 'text-glass-muted hover:text-white hover:bg-white/[0.04]'
+                  ? 'bg-zinc-800 text-white' 
+                  : 'text-zinc-500 hover:text-zinc-300'
               }`}
             >
               {tab.label}
@@ -171,54 +286,115 @@ export default function DashboardPage() {
         </nav>
 
         <div className="flex items-center gap-4">
-          <span className="text-xs text-glass-muted">
-            Welcome, <span className="text-white font-semibold">{user.username}</span>
+          <span className="text-xs text-zinc-500">
+            Username: <span className="text-zinc-300 font-semibold">{user.username}</span>
           </span>
           <button 
             onClick={handleLogout}
-            className="p-2 rounded-lg bg-white/[0.04] hover:bg-glass-danger/10 text-glass-muted hover:text-glass-danger transition border border-white/[0.06] hover:border-glass-danger/20"
+            className="p-1.5 rounded bg-zinc-900 hover:bg-red-950/20 text-zinc-500 hover:text-red-400 border border-zinc-800 hover:border-red-900/30 transition"
             title="Sign out"
           >
-            <LogOut className="w-4 h-4" />
+            <LogOut className="w-3.5 h-3.5" />
           </button>
         </div>
       </header>
 
       {/* ==========================================
-          MAIN INTERACTIVE LAYOUT REGION
+          MAIN LAYOUT REGION
           ========================================== */}
-      <div className="flex-grow max-w-7xl w-full mx-auto px-4 md:px-8 mt-8">
+      <div className="flex-grow max-w-7xl w-full mx-auto px-6 mt-8">
         
         {/* VIEW 1: TEST CENTER & UPLOAD ENGINE */}
         {activeTab === 'terminal' && (
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 items-start animate-fade-in">
             
-            {/* Left Side: Animated Hero Orb & Upload Panel */}
-            <div className="lg:col-span-2 space-y-5">
-              <HeroOrb isScanning={isScanning} />
+            {/* Left Side: Parameters Config & Upload Console */}
+            <div className="lg:col-span-2 space-y-4">
               
-              {/* File Upload Panel */}
-              <div className="glass-card p-6">
-                <h3 className="text-sm font-bold tracking-wide text-white mb-1.5">Upload Study Material</h3>
-                <p className="text-xs text-glass-muted leading-relaxed mb-4">
-                  Drop handwritten notes, textbook photos, or vocabulary lists. Our AI will analyze and generate targeted exam questions.
+              {/* Configuration panel */}
+              <div className="glass-card p-5 bg-zinc-950">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-white mb-4 flex items-center gap-2">
+                  <Sliders className="w-3.5 h-3.5 text-zinc-400" />
+                  Exam Parameters
+                </h3>
+                
+                <div className="space-y-4">
+                  {/* Target Exam Dropdown */}
+                  <div>
+                    <label className="text-[10px] text-zinc-500 uppercase tracking-wider block mb-1">Target Exam</label>
+                    <select
+                      value={examType}
+                      onChange={(e) => setExamType(e.target.value)}
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-zinc-700"
+                    >
+                      <option value="SSC CGL">SSC CGL (Combined Graduate Level)</option>
+                      <option value="SSC CHSL">SSC CHSL (Combined Higher Secondary Level)</option>
+                      <option value="SSC MTS">SSC MTS (Multi-Tasking Staff)</option>
+                      <option value="SSC CPO">SSC CPO (Central Police Organisation)</option>
+                    </select>
+                  </div>
+
+                  {/* Subject Focus Dropdown */}
+                  <div>
+                    <label className="text-[10px] text-zinc-500 uppercase tracking-wider block mb-1">Subject Focus</label>
+                    <select
+                      value={subject}
+                      onChange={(e) => setSubject(e.target.value)}
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-zinc-700"
+                    >
+                      <option value="Mixed">Mixed Topics</option>
+                      <option value="English (Vocab & Grammar)">English (Vocab & Grammar)</option>
+                      <option value="General Studies (GS)">General Studies (GS)</option>
+                      <option value="Quantitative Aptitude (Maths)">Quantitative Aptitude (Maths)</option>
+                      <option value="Reasoning">General Intelligence & Reasoning</option>
+                    </select>
+                  </div>
+
+                  {/* Question Count Selection */}
+                  <div>
+                    <label className="text-[10px] text-zinc-500 uppercase tracking-wider block mb-1">Question Count</label>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {[5, 10, 15, 20].map((num) => (
+                        <button
+                          key={num}
+                          type="button"
+                          onClick={() => setQuestionCount(num)}
+                          className={`py-1.5 rounded border text-xs font-semibold font-mono transition ${
+                            questionCount === num
+                              ? 'bg-white border-white text-black font-bold'
+                              : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700'
+                          }`}
+                        >
+                          {num} Qs
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Upload panel */}
+              <div className="glass-card p-5 bg-zinc-950">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-white mb-2">Upload Revision Image</h3>
+                <p className="text-xs text-zinc-500 leading-relaxed mb-4">
+                  Upload study notes, textbook pages, or mock answers. The AI will parse details and synthesis questions based on the parameters above.
                 </p>
                 
-                <label className={`w-full h-32 border-2 border-dashed rounded-xl flex flex-col items-center justify-center gap-2 cursor-pointer transition-all duration-300 ${
+                <label className={`w-full h-28 border border-dashed rounded-lg flex flex-col items-center justify-center gap-1.5 cursor-pointer transition ${
                   isScanning 
-                    ? 'border-glass-success/30 bg-glass-success/5 opacity-60 pointer-events-none' 
-                    : 'border-white/10 bg-white/[0.02] hover:border-glass-accent/30 hover:bg-white/[0.04] hover:shadow-glow'
+                    ? 'border-zinc-800 bg-zinc-900/30 opacity-60 pointer-events-none' 
+                    : 'border-zinc-800 bg-zinc-900/10 hover:border-zinc-700 hover:bg-zinc-900/20'
                 }`}>
-                  <Upload className={`w-8 h-8 ${isScanning ? 'text-glass-success animate-bounce' : 'text-white/25'}`} />
-                  <span className="text-xs text-glass-muted font-medium">
-                    {isScanning ? 'Processing...' : 'Select an image'}
+                  <Upload className={`w-6 h-6 ${isScanning ? 'text-zinc-500 animate-bounce' : 'text-zinc-500'}`} />
+                  <span className="text-[11px] text-zinc-400 font-semibold">
+                    {isScanning ? 'AI OCR scanning notes...' : 'Select study note image'}
                   </span>
                   <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={isScanning} />
                 </label>
 
                 {uploadStatus && (
-                  <div className="mt-3 glass-card !rounded-lg p-3 text-center">
-                    <p className="text-xs text-glass-accent font-medium animate-pulse">
+                  <div className="mt-3 bg-zinc-900/50 border border-zinc-900 rounded p-2 text-center">
+                    <p className="text-[10px] text-zinc-400 font-mono animate-pulse">
                       {uploadStatus}
                     </p>
                   </div>
@@ -226,18 +402,24 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Right Side: Live Testing Engine Output */}
+            {/* Right Side: Testing Console */}
             <div className="lg:col-span-3">
               {generatedQuiz ? (
-                <QuizTerminal quizData={generatedQuiz} quizId={currentQuizId} userId={user.id} />
+                <QuizTerminal 
+                  quizData={generatedQuiz} 
+                  quizId={currentQuizId} 
+                  userId={user.id} 
+                  imageBase64={quizImageBase64}
+                  imagesBase64={quizImagesBase64}
+                />
               ) : (
-                <div className="w-full h-[540px] glass-card flex flex-col items-center justify-center text-center p-8">
-                  <div className="w-16 h-16 rounded-2xl bg-white/[0.03] border border-white/[0.06] flex items-center justify-center mb-5">
-                    <FileText className="w-7 h-7 text-white/15" />
+                <div className="w-full h-[450px] glass-card flex flex-col items-center justify-center text-center p-8 bg-zinc-950">
+                  <div className="w-10 h-10 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center mb-4">
+                    <FileText className="w-5 h-5 text-zinc-500" />
                   </div>
-                  <h3 className="text-base font-semibold text-white/60 mb-2">No Active Exam</h3>
-                  <p className="text-sm text-glass-muted max-w-xs leading-relaxed">
-                    Upload a study image to generate a TCS-pattern mock exam with AI-powered question analysis.
+                  <h3 className="text-sm font-semibold text-zinc-400 mb-1">No Active Exam Session</h3>
+                  <p className="text-xs text-zinc-600 max-w-xs leading-relaxed">
+                    Set your exam parameters on the left, upload a note image, and the TCS-pattern revision testing console will compile here.
                   </p>
                 </div>
               )}
@@ -248,69 +430,195 @@ export default function DashboardPage() {
 
         {/* VIEW 2: VOCABULARY VAULT */}
         {activeTab === 'vault' && (
-          <div className="animate-fade-in">
+          <div className="animate-fade-in bg-zinc-950 border border-zinc-900 rounded-xl overflow-hidden">
             <VocabVault vocabularyItems={vaultWords} />
           </div>
         )}
 
-        {/* VIEW 3: HISTORICAL EXAM LOGS */}
+        {/* VIEW 3: HISTORICAL EXAM LOGS & REPOSITORY */}
         {activeTab === 'metrics' && (
-          <div className="glass-card p-6 md:p-8 max-w-4xl mx-auto animate-fade-in">
-            <div className="flex items-center gap-3 mb-6 border-b border-white/[0.06] pb-5">
-              <div className="w-10 h-10 rounded-xl bg-glass-accent/10 border border-glass-accent/20 flex items-center justify-center">
-                <Award className="w-5 h-5 text-glass-accent" />
-              </div>
-              <div>
-                <h3 className="text-xl font-bold text-white">Exam History</h3>
-                <p className="text-xs text-glass-muted mt-0.5">Your past mock exam attempts and performance</p>
-              </div>
-            </div>
-
-            {historicalLogs.length === 0 ? (
-              <div className="text-center py-16">
-                <div className="w-14 h-14 rounded-2xl bg-white/[0.03] border border-white/[0.06] flex items-center justify-center mx-auto mb-4">
-                  <TrendingUp className="w-6 h-6 text-white/15" />
-                </div>
-                <p className="text-sm text-glass-muted">No exam attempts recorded yet</p>
-                <p className="text-xs text-white/20 mt-1">Complete a mock exam to see your stats here</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {historicalLogs.map((log, index) => (
-                  <div key={log.logId || index} className="glass-card-hover p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div className="flex items-start gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-glass-success/10 border border-glass-success/20 flex items-center justify-center shrink-0 mt-0.5">
-                        <CheckCircle2 className="w-4 h-4 text-glass-success" />
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-semibold text-white">
-                          Quiz {String(log.quizId).substring(0, 8).toUpperCase()}
-                        </h4>
-                        <p className="text-xs text-glass-muted mt-0.5">{log.dateString}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-6 text-right">
-                      <div>
-                        <span className="text-[10px] uppercase text-glass-muted block mb-0.5 tracking-wider">Speed</span>
-                        <span className="text-sm text-glass-amber font-bold flex items-center gap-1">
-                          <Clock className="w-3 h-3" /> {log.speedMinutes} min
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] uppercase text-glass-muted block mb-0.5 tracking-wider">Accuracy</span>
-                        <span className={`text-base font-black ${log.accuracy >= 70 ? 'text-glass-success' : 'text-glass-accent'}`}>
-                          {log.accuracy}%
-                        </span>
-                      </div>
-                    </div>
+          <div className="space-y-6 animate-fade-in">
+            
+            {/* Repository overview panel grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+              
+              {/* Left Side (Col span 7): Created Mocks list with check mixer controls */}
+              <div className="lg:col-span-7 glass-card p-5 bg-zinc-950">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-zinc-900 pb-4 mb-4 gap-3">
+                  <div>
+                    <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                      Mock Quiz Repository
+                    </h3>
+                    <p className="text-[10px] text-zinc-500 mt-0.5">Click quiz to retake. Check 2-3 to merge them.</p>
                   </div>
-                ))}
+                  
+                  {/* Floating selected counter */}
+                  {selectedQuizzes.length >= 2 && (
+                    <button
+                      onClick={handleMixQuizzes}
+                      disabled={isMixing}
+                      className="px-3 py-1 bg-white hover:bg-zinc-200 text-black text-[11px] font-bold rounded flex items-center gap-1 transition"
+                    >
+                      <Shuffle className="w-3.5 h-3.5" />
+                      Mix Selected ({selectedQuizzes.length})
+                    </button>
+                  )}
+                </div>
+
+                {createdQuizzes.length === 0 ? (
+                  <div className="text-center py-12 bg-zinc-900/10 border border-zinc-900 rounded-lg">
+                    <p className="text-xs text-zinc-500">No mock exams generated yet</p>
+                    <p className="text-[10px] text-zinc-600 mt-1">Upload study notes in Testing Portal to generate exams</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {createdQuizzes.map((quiz) => {
+                      const isSelected = selectedQuizzes.includes(quiz.quizId);
+                      return (
+                        <div 
+                          key={quiz.quizId} 
+                          className={`p-3 rounded-lg border transition flex items-center justify-between gap-3 ${
+                            isSelected 
+                              ? 'bg-zinc-900 border-zinc-700' 
+                              : 'bg-zinc-900/30 border-zinc-900 hover:border-zinc-800'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            {/* Checkbox selector */}
+                            <button
+                              onClick={() => handleSelectQuiz(quiz.quizId)}
+                              className={`w-4.5 h-4.5 rounded border flex items-center justify-center transition shrink-0 ${
+                                isSelected 
+                                  ? 'bg-white border-white text-black' 
+                                  : 'bg-transparent border-zinc-800 hover:border-zinc-700 text-transparent'
+                              }`}
+                            >
+                              <Check className="w-3.5 h-3.5 stroke-[3]" />
+                            </button>
+
+                            {/* Note preview thumbnail */}
+                            {(quiz.imageBase64 || (quiz.imagesBase64 && quiz.imagesBase64[0])) ? (
+                              <div 
+                                onClick={() => setNotesPreviewImage(quiz.imageBase64 || quiz.imagesBase64[0])}
+                                className="w-10 h-10 bg-zinc-950 rounded border border-zinc-800 flex items-center justify-center overflow-hidden cursor-zoom-in shrink-0 hover:border-zinc-600 transition"
+                                title="View Notes Image"
+                              >
+                                <img 
+                                  src={`data:image/jpeg;base64,${quiz.imageBase64 || quiz.imagesBase64[0]}`}
+                                  alt="Note Thumbnail"
+                                  className="w-full h-full object-cover opacity-60 hover:opacity-100 transition"
+                                />
+                              </div>
+                            ) : (
+                              <div className="w-10 h-10 bg-zinc-950 rounded border border-zinc-900 flex items-center justify-center shrink-0">
+                                <FileText className="w-4 h-4 text-zinc-700" />
+                              </div>
+                            )}
+
+                            {/* Meta texts */}
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="text-xs font-semibold text-white truncate max-w-[120px]">
+                                  {quiz.isMixed ? 'Combined revision' : quiz.examType}
+                                </span>
+                                <span className="px-1.5 py-0.2 bg-zinc-900 border border-zinc-800 text-[8px] font-bold rounded text-zinc-400 uppercase tracking-wide">
+                                  {quiz.subject}
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-zinc-500 mt-0.5">
+                                {quiz.questionCount} Questions &bull; {quiz.dateString}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Retake button */}
+                          <button
+                            onClick={() => handleLoadQuiz(quiz.quizId, quiz.imageBase64, quiz.imagesBase64)}
+                            className="px-2.5 py-1 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 hover:bg-zinc-800 text-[10px] font-semibold rounded text-white transition shrink-0"
+                          >
+                            Start Exam
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-            )}
+
+              {/* Right Side (Col span 5): Recent Score attempt logs */}
+              <div className="lg:col-span-5 glass-card p-5 bg-zinc-950">
+                <h3 className="text-sm font-bold text-white uppercase tracking-wider border-b border-zinc-900 pb-4 mb-4">
+                  Recent Attempt History
+                </h3>
+
+                {historicalLogs.length === 0 ? (
+                  <div className="text-center py-12 bg-zinc-900/10 border border-zinc-900 rounded-lg">
+                    <p className="text-xs text-zinc-500">No mock attempts recorded yet</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-[460px] overflow-y-auto pr-1">
+                    {historicalLogs.map((log, index) => (
+                      <div key={log.logId || index} className="p-3 bg-zinc-900/20 border border-zinc-900 rounded-lg flex items-center justify-between gap-3">
+                        <div>
+                          <h4 className="text-xs font-bold text-white">
+                            Mock: {String(log.quizId).substring(0, 8).toUpperCase()}
+                          </h4>
+                          <div className="flex items-center gap-2 text-[10px] text-zinc-500 mt-0.5 font-mono">
+                            <span>{log.dateString}</span>
+                            <span>&bull;</span>
+                            <span className="flex items-center gap-0.5"><Clock className="w-2.5 h-2.5" /> {log.speedMinutes} min</span>
+                          </div>
+                        </div>
+
+                        <div className="text-right shrink-0">
+                          <span className="text-[10px] uppercase text-zinc-500 block">Accuracy</span>
+                          <span className={`text-sm font-bold ${log.accuracy >= 70 ? 'text-emerald-400' : 'text-amber-500'}`}>
+                            {log.accuracy}%
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+            </div>
           </div>
         )}
 
       </div>
+
+      {/* ==========================================
+          LIGHTBOX NOTE PREVIEW MODAL MODULE
+          ========================================== */}
+      {notesPreviewImage && (
+        <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="relative max-w-4xl w-full h-[85vh] bg-zinc-950 border border-zinc-800 rounded-xl flex flex-col overflow-hidden animate-fade-in">
+            {/* Modal header */}
+            <div className="flex items-center justify-between p-3 border-b border-zinc-900 shrink-0">
+              <span className="text-xs font-bold text-zinc-400 flex items-center gap-1.5">
+                <FileText className="w-3.5 h-3.5" /> Study Note Preview
+              </span>
+              <button 
+                onClick={() => setNotesPreviewImage(null)}
+                className="p-1 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-500 hover:text-white transition border border-zinc-800"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            {/* Image display */}
+            <div className="flex-grow w-full overflow-auto p-4 flex items-center justify-center bg-black select-none">
+              <img 
+                src={`data:image/jpeg;base64,${notesPreviewImage}`}
+                alt="Full study notes zoom"
+                className="max-h-full max-w-full object-contain rounded"
+                draggable="false"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

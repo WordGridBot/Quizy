@@ -43,6 +43,11 @@ export async function GET(request, { params }) {
       success: true,
       quizId: quizDoc._id,
       questions: quizDoc.questions,
+      imageBase64: quizDoc.imageBase64 || null,
+      imagesBase64: quizDoc.imagesBase64 || null,
+      examType: quizDoc.examType || 'SSC CGL',
+      subject: quizDoc.subject || 'Mixed',
+      isMixed: quizDoc.isMixed || false,
       leaderboard: rankings
     }, { status: 200 });
 

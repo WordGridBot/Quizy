@@ -92,10 +92,10 @@ export async function GET() {
     const db = client.db('cgl_core_db');
 
     // Pull attempts for this specific user. 
-    // Sorted by 'completedAt: 1' (Chronological Order) so tracking lines chart correctly from left to right.
+    // Sorted by 'completedAt: -1' (Newest first for dashboard layout)
     const userHistory = await db.collection('score_logs')
       .find({ userId: new ObjectId(sessionUser.userId) })
-      .sort({ completedAt: 1 }) 
+      .sort({ completedAt: -1 }) 
       .toArray();
 
     // Formatting payload optimization for lightweight data payload transmission
@@ -114,11 +114,35 @@ export async function GET() {
       })
     }));
 
+    // Fetch all quizzes created by this user
+    const userQuizzesRaw = await db.collection('quizzes')
+      .find({ creatorId: sessionUser.userId })
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    const userQuizzes = userQuizzesRaw.map(quiz => ({
+      quizId: quiz._id,
+      createdAt: quiz.createdAt,
+      examType: quiz.examType || 'SSC CGL',
+      subject: quiz.subject || 'Mixed',
+      questionCount: quiz.questionCount || (quiz.questions ? quiz.questions.length : 0),
+      imageBase64: quiz.imageBase64 || null,
+      imagesBase64: quiz.imagesBase64 || null,
+      isMixed: quiz.isMixed || false,
+      dateString: quiz.createdAt.toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    }));
+
     return NextResponse.json({
       success: true,
       username: sessionUser.username,
       totalAttemptsRecorded: performanceTrackingLines.length,
-      history: performanceTrackingLines
+      history: performanceTrackingLines,
+      createdQuizzes: userQuizzes
     }, { status: 200 });
 
   } catch (error) {

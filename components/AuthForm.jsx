@@ -18,7 +18,7 @@ export default function AuthForm({ onAuthSuccess }) {
 
     const targetUrl = isLogin ? '/api/auth/login' : '/api/auth/register';
     const payload = isLogin 
-      ? { identifier: email, password } // identifier holds username or email
+      ? { identifier: email, password }
       : { username, email, password };
 
     try {
@@ -44,75 +44,75 @@ export default function AuthForm({ onAuthSuccess }) {
   };
 
   return (
-    <div className="w-full max-w-sm mx-auto glass-card p-8 shadow-glow animate-fade-in">
+    <div className="w-full max-w-sm mx-auto glass-card p-6 bg-zinc-950 border border-zinc-800 rounded-xl animate-fade-in shadow-2xl">
       <div className="text-center mb-6">
-        <h3 className="text-xl font-semibold tracking-wide text-gradient">
+        <h3 className="text-lg font-bold text-white tracking-wide">
           {isLogin ? 'Sign In' : 'Create Account'}
         </h3>
-        <p className="text-xs text-glass-muted mt-1.5">
-          {isLogin ? 'Access your personalized dashboard' : 'Set up your student profile'}
+        <p className="text-xs text-zinc-500 mt-1">
+          {isLogin ? 'Access your exam revision dashboard' : 'Set up your student profile'}
         </p>
       </div>
 
       {error && (
-        <div className="mb-4 p-3 rounded-lg glass-card !border-glass-danger/20 bg-glass-danger/5 flex items-center gap-2 text-xs text-glass-danger animate-fade-in">
+        <div className="mb-4 p-3 rounded-lg border border-red-950 bg-red-950/20 flex items-center gap-2 text-xs text-red-400 animate-fade-in">
           <ShieldAlert className="w-4 h-4 shrink-0" />
           <span>{error}</span>
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-3">
         {!isLogin && (
           <div className="relative">
-            <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-glass-muted" />
+            <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
             <input
               type="text"
               required
               placeholder="Username"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="glass-input pl-10 pr-4 py-3 w-full text-sm"
+              className="glass-input pl-9 pr-3 py-2 w-full text-xs"
             />
           </div>
         )}
 
         <div className="relative">
-          <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-glass-muted" />
+          <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
           <input
             type={isLogin ? "text" : "email"}
             required
             placeholder={isLogin ? "Username or Email" : "Email Address"}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="glass-input pl-10 pr-4 py-3 w-full text-sm"
+            className="glass-input pl-9 pr-3 py-2 w-full text-xs"
           />
         </div>
 
         <div className="relative">
-          <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-glass-muted" />
+          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
           <input
             type="password"
             required
             placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="glass-input pl-10 pr-4 py-3 w-full text-sm"
+            className="glass-input pl-9 pr-3 py-2 w-full text-xs"
           />
         </div>
 
         <button
           type="submit"
           disabled={isLoading}
-          className="btn-gradient w-full py-3 mt-2 text-sm tracking-wide disabled:opacity-50"
+          className="btn-gradient w-full py-2 mt-2 text-xs font-bold"
         >
-          {isLoading ? 'Signing in...' : isLogin ? 'Sign In' : 'Create Account'}
+          {isLoading ? 'Processing...' : isLogin ? 'Sign In' : 'Create Account'}
         </button>
       </form>
 
-      <div className="mt-5 text-center border-t border-glass-border pt-4">
+      <div className="mt-5 text-center border-t border-zinc-900 pt-4">
         <button
           onClick={() => { setIsLogin(!isLogin); setError(''); }}
-          className="text-xs text-glass-muted hover:text-glass-accent transition-colors"
+          className="text-xs text-zinc-500 hover:text-white transition"
         >
           {isLogin ? 'Need an account? Sign up' : 'Already have an account? Sign in'}
         </button>
