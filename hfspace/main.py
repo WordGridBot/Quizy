@@ -17,12 +17,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Clients (initialized once on startup)
-nvidia = OpenAI(
-    api_key=os.environ["NVIDIA_API_KEY"],
-    base_url="https://integrate.api.nvidia.com/v1",
-    timeout=60.0  # 60 seconds timeout to prevent infinite hanging
-)
+# Load API Keys (supports single key or comma-separated list of keys for rotation)
+API_KEYS = [k.strip() for k in os.environ.get("NVIDIA_API_KEY", "").split(",") if k.strip()]
+
+def get_nvidia_client(index: int = 0) -> OpenAI:
+    if not API_KEYS:
+        raise ValueError("NVIDIA_API_KEY environment variable is missing or empty.")
+    # Rotate through keys in round-robin fashion based on index
+    selected_key = API_KEYS[index % len(API_KEYS)]
+    # Print partial key for diagnostic confirmation
+    masked_key = selected_key[:10] + "..." + selected_key[-5:] if len(selected_key) > 15 else "..."
+    print(f"Using NVIDIA API Key index {index % len(API_KEYS)}: {masked_key}", flush=True)
+    return OpenAI(
+        api_key=selected_key,
+        base_url="https://integrate.api.nvidia.com/v1",
+        timeout=60.0  # 60 seconds timeout
+    )
+
 mongo = MongoClient(os.environ["MONGODB_URI"])
 db = mongo["cgl_core_db"]
 
@@ -58,11 +69,11 @@ async def analyze(
     print(f"Parameters: Exam={body.examType}, Subject={body.subject}, Questions={body.questionCount}")
     print(f"Processing {len(body.imagesBase64)} note images...")
 
-    # --- STEP 1: Run OCR on all images concurrently ---
-    def ocr_single(img_base64: str) -> str:
-        print("Starting OCR extraction for a note page...")
+    # --- STEP 1: Run OCR on all note pages sequentially ---
+    def ocr_single(img_base64: str, client: OpenAI) -> str:
+        print("Starting OCR extraction for a note page...", flush=True)
         try:
-            resp = nvidia.chat.completions.create(
+            resp = client.chat.completions.create(
                 model="meta/llama-3.2-11b-vision-instruct",
                 messages=[{
                     "role": "user",
@@ -81,26 +92,27 @@ async def analyze(
                 }]
             )
             content = resp.choices[0].message.content or ""
-            print(f"Finished OCR extraction. Extracted {len(content)} characters.")
+            print(f"Finished OCR extraction. Extracted {len(content)} characters.", flush=True)
             return content
         except Exception as e:
-            print(f"OCR extraction failed for page: {str(e)}")
+            print(f"OCR extraction failed for page: {str(e)}", flush=True)
             raise e
 
     # Run all OCR calls sequentially one-by-one to avoid hitting concurrency limits on the free tier
     ocr_results = []
     for idx, img in enumerate(body.imagesBase64):
-        print(f"Processing page {idx + 1} of {len(body.imagesBase64)}...")
-        page_text = await asyncio.to_thread(ocr_single, img)
+        print(f"Processing page {idx + 1} of {len(body.imagesBase64)}...", flush=True)
+        client = get_nvidia_client(idx)
+        page_text = await asyncio.to_thread(ocr_single, img, client)
         ocr_results.append(page_text)
     raw_text = "\n\n--- NEXT NOTE PAGE ---\n\n".join(ocr_results)
 
     if not raw_text.strip():
-        print("Error: OCR extraction yielded zero usable data.")
+        print("Error: OCR extraction yielded zero usable data.", flush=True)
         raise HTTPException(status_code=422, detail="OCR extraction yielded zero usable data")
 
-    print(f"Extracted raw text combined size: {len(raw_text)} characters.")
-    print("Generating MCQs using Nemotron model...")
+    print(f"Extracted raw text combined size: {len(raw_text)} characters.", flush=True)
+    print("Generating MCQs using Nemotron model...", flush=True)
 
     # --- STEP 2: Generate MCQs from extracted text ---
     system_prompt = f"""
@@ -124,9 +136,9 @@ You must respond ONLY with a raw, valid JSON object following this exact syntax:
 }}
 """
 
-    def generate_mcq():
+    def generate_mcq(client: OpenAI):
         try:
-            return nvidia.chat.completions.create(
+            return client.chat.completions.create(
                 model="meta/llama-3.3-70b-instruct",
                 messages=[
                     {"role": "system", "content": system_prompt},
@@ -136,12 +148,14 @@ You must respond ONLY with a raw, valid JSON object following this exact syntax:
                 temperature=0.3
             )
         except Exception as e:
-            print(f"MCQ generation call failed: {str(e)}")
+            print(f"MCQ generation call failed: {str(e)}", flush=True)
             raise e
 
-    gen_response = await asyncio.to_thread(generate_mcq)
+    # Rotate client for MCQ generation
+    mcq_client = get_nvidia_client(len(body.imagesBase64))
+    gen_response = await asyncio.to_thread(generate_mcq, mcq_client)
     output = json.loads(gen_response.choices[0].message.content)
-    print(f"Successfully synthesized {len(output.get('quiz', []))} MCQs and {len(output.get('vocabWords', []))} vocab words.")
+    print(f"Successfully synthesized {len(output.get('quiz', []))} MCQs and {len(output.get('vocabWords', []))} vocab words.", flush=True)
 
     # --- STEP 3: Save to MongoDB ---
     print("Connecting to MongoDB to log the generated mock quiz...")
