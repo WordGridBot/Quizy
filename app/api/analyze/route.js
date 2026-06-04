@@ -33,7 +33,7 @@ export async function POST(request) {
     // Process all uploaded images concurrently using a supported active multimodal model
     const ocrPromises = base64Array.map(async (imgBase64, idx) => {
       const ocrResponse = await nvidia.chat.completions.create({
-        model: "meta/llama-3.2-11b-vision-instruct", 
+        model: "meta/llama-3.2-90b-vision-instruct", 
         messages: [
           {
             role: "user",
