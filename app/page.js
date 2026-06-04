@@ -207,7 +207,7 @@ export default function DashboardPage() {
           ? `${normalizedBase}/analyze` 
           : `${normalizedBase}/api/analyze`;
         
-        headers['X-API-Secret'] = process.env.NEXT_PUBLIC_API_SECRET || 'cgl-core-secret';
+        headers['X-API-Secret'] = process.env.NEXT_PUBLIC_API_SECRET || 'Japu';
       } else {
         targetUrl = '/api/analyze';
       }
