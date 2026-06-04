@@ -18,6 +18,7 @@ app.add_middleware(
 
 # Load API Keys (supports single key or comma-separated list of keys for rotation)
 API_KEYS = [k.strip() for k in os.environ.get("NVIDIA_API_KEY", "").split(",") if k.strip()]
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "").strip()
 
 # Initialize a queue containing indices of all free keys
 free_keys_queue = asyncio.Queue()
@@ -33,8 +34,19 @@ def get_nvidia_client(index: int = 0) -> OpenAI:
     return OpenAI(
         api_key=selected_key,
         base_url="https://integrate.api.nvidia.com/v1",
-        timeout=60.0  # 60 seconds timeout
+        timeout=180.0  # 180 seconds timeout
     )
+
+groq_client = None
+if GROQ_API_KEY:
+    print("GROQ_API_KEY detected. Initializing Groq client.", flush=True)
+    groq_client = OpenAI(
+        api_key=GROQ_API_KEY,
+        base_url="https://api.groq.com/openai/v1",
+        timeout=180.0
+    )
+else:
+    print("Warning: GROQ_API_KEY environment variable is missing. Will fall back to NVIDIA for MCQ generation.", flush=True)
 
 class AnalyzeRequest(BaseModel):
     imagesBase64: list[str]
@@ -121,10 +133,18 @@ You must respond ONLY with a raw, valid JSON object following this exact syntax:
     ]
 }}
 """
+        # Determine whether to use Groq or fall back to NVIDIA
+        mcq_client = groq_client
+        mcq_model = "llama-3.3-70b-versatile"
+        if not mcq_client:
+            print(f"Page {page_idx + 1}: GROQ_API_KEY not configured. Falling back to NVIDIA for MCQ generation.", flush=True)
+            mcq_client = client
+            mcq_model = "meta/llama-3.3-70b-instruct"
+
         try:
-            print(f"Page {page_idx + 1}: Querying MCQ generator Llama 3.3 70B...", flush=True)
-            mcq_resp = client.chat.completions.create(
-                model="meta/llama-3.3-70b-instruct",
+            print(f"Page {page_idx + 1}: Querying MCQ generator {mcq_model}...", flush=True)
+            mcq_resp = mcq_client.chat.completions.create(
+                model=mcq_model,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": f"Here is the raw extracted text from the study notes:\n\n{raw_text}"}
@@ -133,7 +153,7 @@ You must respond ONLY with a raw, valid JSON object following this exact syntax:
                 temperature=0.3
             )
             output = json.loads(mcq_resp.choices[0].message.content)
-            print(f"Page {page_idx + 1}: Synthesis finished. Generated {len(output.get('quiz', []))} MCQs.", flush=True)
+            print(f"Page {page_idx + 1}: Synthesis finished with {mcq_model}. Generated {len(output.get('quiz', []))} MCQs.", flush=True)
             return output
         except Exception as e:
             print(f"Page {page_idx + 1}: MCQ generation failed with error: {str(e)}", flush=True)
