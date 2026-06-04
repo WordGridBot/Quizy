@@ -151,26 +151,141 @@ export default function DashboardPage() {
       const compressionPromises = uploadedFiles.map(f => compressImage(f.file));
       const base64Array = await Promise.all(compressionPromises);
 
-      setUploadStatus('Running AI OCR + Synthesis (this may take up to 45 seconds)...');
+      const clientApiKey = process.env.NEXT_PUBLIC_NVIDIA_API_KEY;
       
-      const res = await fetch('/api/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          imagesBase64: base64Array, 
-          userId: user?.id,
-          examType,
-          subject,
-          questionCount
-        })
-      });
-      
-      const data = await res.json();
-      
-      if (!res.ok) throw new Error(data.error || 'Pipeline parsing breakdown');
+      let quizData, vocabData, quizId;
 
-      setGeneratedQuiz(data.quizData);
-      setCurrentQuizId(data.quizId);
+      if (clientApiKey) {
+        setUploadStatus('Direct VLM extraction in browser (bypassing Vercel 10s limit)...');
+        
+        // Concurrent OCR extraction directly from client browser
+        const ocrPromises = base64Array.map(async (imgBase64) => {
+          const ocrResponse = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${clientApiKey}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              model: "meta/llama-3.2-90b-vision-instruct", 
+              messages: [
+                {
+                  role: "user",
+                  content: [
+                    { type: "text", text: "Extract all text, lists, facts, vocabulary words, and notes from this image with absolute precision. Do not summarize. Return only raw text." },
+                    {
+                      type: "image_url",
+                      image_url: { url: `data:image/jpeg;base64,${imgBase64}` }
+                    }
+                  ]
+                }
+              ],
+              temperature: 0.2
+            })
+          });
+          const resJson = await ocrResponse.json();
+          if (!ocrResponse.ok) throw new Error(resJson.error?.message || 'Vision model error');
+          return resJson.choices[0].message.content || '';
+        });
+
+        const ocrResults = await Promise.all(ocrPromises);
+        const rawExtractedText = ocrResults.join('\n\n--- NEXT NOTE PAGE ---\n\n');
+
+        if (!rawExtractedText || rawExtractedText.trim().length === 0) {
+          throw new Error("Vision model extracted zero usable text from images");
+        }
+
+        setUploadStatus('Direct synthesis in browser (Stage 2: MCQ generation)...');
+
+        const generatorSystemPrompt = `
+          You are an expert ${examType} Content Generator. Review the raw textbook data and:
+          1. Extract all high-priority English vocabulary words or advanced facts.
+          2. Construct exactly ${Number(questionCount)} tough Multiple Choice Questions (MCQs) mimicking the TCS examination style for the subject/section "${subject}" based strictly on the text.
+          
+          You must respond ONLY with a raw, valid JSON object following this exact syntax blueprint:
+          {
+            "vocabWords": [
+              { "word": "string", "meaning": "string", "contextFromNotes": "string" }
+            ],
+            "quiz": [
+              {
+                "question": "string",
+                "options": ["Option A text", "Option B text", "Option C text", "Option D text"],
+                "correctAnswer": "A/B/C/D",
+                "explanation": "Detailed exam-oriented breakdown explaining why this choice is correct."
+              }
+            ]
+          }
+        `;
+
+        const synthesisResponse = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${clientApiKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: "nvidia/llama-3.3-nemotron-super-49b-v1.5",
+            messages: [
+              { role: "system", content: generatorSystemPrompt },
+              { role: "user", content: `Here is the raw extracted text from the study notes:\n\n${rawExtractedText}` }
+            ],
+            response_format: { type: "json_object" },
+            temperature: 0.3
+          })
+        });
+
+        const resJson2 = await synthesisResponse.json();
+        if (!synthesisResponse.ok) throw new Error(resJson2.error?.message || 'Synthesis model error');
+
+        const structuredOutput = JSON.parse(resJson2.choices[0].message.content);
+        quizData = structuredOutput.quiz;
+        vocabData = structuredOutput.vocabWords;
+
+        setUploadStatus('Saving exam session and vocabulary parameters...');
+
+        const saveRes = await fetch('/api/quizzes/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            quizData,
+            vocabData,
+            imagesBase64: base64Array,
+            examType,
+            subject,
+            questionCount
+          })
+        });
+        const saveJson = await saveRes.json();
+        if (!saveRes.ok) throw new Error(saveJson.error || 'Failed to save quiz session');
+        
+        quizId = saveJson.quizId;
+      } else {
+        // Fall back to serverless route
+        setUploadStatus('Running AI analysis via Vercel Serverless (may timeout on Hobby tier)...');
+        
+        const res = await fetch('/api/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            imagesBase64: base64Array, 
+            userId: user?.id,
+            examType,
+            subject,
+            questionCount
+          })
+        });
+        
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Pipeline parsing breakdown');
+
+        quizData = data.quizData;
+        vocabData = data.vocabData;
+        quizId = data.quizId;
+      }
+
+      setGeneratedQuiz(quizData);
+      setCurrentQuizId(quizId);
       setQuizImageBase64(base64Array[0] || null);
       setQuizImagesBase64(base64Array);
       setUploadStatus('Analysis complete — quiz generated successfully.');
