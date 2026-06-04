@@ -22,9 +22,9 @@ export async function GET(request, { params }) {
       return NextResponse.json({ error: "Requested exam matrix does not exist inside system core" }, { status: 404 });
     }
 
-    // 2. Fetch and aggregate all scores for this specific quiz to generate ranks
+    // 2. Fetch and aggregate all scores for this specific quiz to generate ranks (excluding reattempts)
     const leaderboardRaw = await db.collection('score_logs')
-      .find({ quizId: new ObjectId(quizId) })
+      .find({ quizId: new ObjectId(quizId), isReattempt: { $ne: true } })
       .sort({ accuracy: -1, timeSpentSeconds: 1 }) // Highest precision first, breaking ties with speed
       .toArray();
 
@@ -42,6 +42,7 @@ export async function GET(request, { params }) {
     return NextResponse.json({
       success: true,
       quizId: quizDoc._id,
+      title: quizDoc.title || `${quizDoc.examType || 'SSC CGL'} - ${quizDoc.subject || 'Mixed'} Quiz`,
       questions: quizDoc.questions,
       imageBase64: quizDoc.imageBase64 || null,
       imagesBase64: quizDoc.imagesBase64 || null,

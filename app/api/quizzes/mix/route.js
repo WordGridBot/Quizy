@@ -19,7 +19,7 @@ function getSessionUser() {
 
 export async function POST(request) {
   try {
-    const { quizIds } = await request.json();
+    const { quizIds, title, questionCount } = await request.json();
 
     if (!quizIds || !Array.isArray(quizIds) || quizIds.length === 0) {
       return NextResponse.json({ error: "No quiz IDs provided to mix" }, { status: 400 });
@@ -83,11 +83,13 @@ export async function POST(request) {
       [pooledQuestions[i], pooledQuestions[j]] = [pooledQuestions[j], pooledQuestions[i]];
     }
 
-    // Limit combined quiz to a maximum of 25 questions to keep it focused
-    const finalQuestions = pooledQuestions.slice(0, 25);
+    // Limit combined quiz to requested count or keep all
+    const limitCount = questionCount ? Number(questionCount) : pooledQuestions.length;
+    const finalQuestions = pooledQuestions.slice(0, limitCount);
 
     // Save consolidated mixed quiz doc
     const mixedQuizDoc = await db.collection('quizzes').insertOne({
+      title: title || 'Mixed Revision',
       creatorId,
       createdAt: new Date(),
       questions: finalQuestions,

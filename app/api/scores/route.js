@@ -34,6 +34,28 @@ export async function POST(request) {
     const client = await clientPromise;
     const db = client.db('cgl_core_db');
 
+    // Determine user fields
+    let userId;
+    let username;
+    let isGuest;
+    if (sessionUser) {
+      userId = new ObjectId(sessionUser.userId);
+      username = sessionUser.username;
+      isGuest = false;
+    } else {
+      userId = 'guest';
+      username = guestName ? guestName.trim() : 'Anonymous Peer';
+      isGuest = true;
+    }
+
+    // Check if user already attempted this quiz (determining if this is a reattempt)
+    const existingAttempt = await db.collection('score_logs').findOne({
+      quizId: new ObjectId(quizId),
+      userId: userId,
+      ...(isGuest ? { username: username } : {})
+    });
+    const isReattempt = !!existingAttempt;
+
     // Calculate immediate performance accuracy percentage
     const accuracyPercentage = Math.round((score / totalQuestions) * 100);
 
@@ -45,21 +67,24 @@ export async function POST(request) {
       accuracy: accuracyPercentage,
       timeSpentSeconds: Number(timeSpentSeconds) || 0,
       completedAt: new Date(),
+      userId,
+      username,
+      isGuest,
+      isReattempt
     };
-
-    // If authenticated user, map to their unique ID. If shared guest, save their alias
-    if (sessionUser) {
-      finalScoreLog.userId = new ObjectId(sessionUser.userId);
-      finalScoreLog.username = sessionUser.username;
-      finalScoreLog.isGuest = false;
-    } else {
-      finalScoreLog.userId = 'guest';
-      finalScoreLog.username = guestName ? guestName.trim() : 'Anonymous Peer';
-      finalScoreLog.isGuest = true;
-    }
 
     // Insert document record into MongoDB cluster collection
     const result = await db.collection('score_logs').insertOne(finalScoreLog);
+
+    // Update parent quiz document with attempt timestamps
+    const quizUpdate = { lastAttemptedAt: new Date() };
+    if (isReattempt) {
+      quizUpdate.lastReattemptedAt = new Date();
+    }
+    await db.collection('quizzes').updateOne(
+      { _id: new ObjectId(quizId) },
+      { $set: quizUpdate }
+    );
 
     return NextResponse.json({
       success: true,
@@ -123,12 +148,15 @@ export async function GET() {
     const userQuizzes = userQuizzesRaw.map(quiz => ({
       quizId: quiz._id,
       createdAt: quiz.createdAt,
+      title: quiz.title || `${quiz.examType || 'SSC CGL'} - ${quiz.subject || 'Mixed'} Quiz`,
       examType: quiz.examType || 'SSC CGL',
       subject: quiz.subject || 'Mixed',
       questionCount: quiz.questionCount || (quiz.questions ? quiz.questions.length : 0),
       imageBase64: quiz.imageBase64 || null,
       imagesBase64: quiz.imagesBase64 || null,
       isMixed: quiz.isMixed || false,
+      lastAttemptedAt: quiz.lastAttemptedAt || null,
+      lastReattemptedAt: quiz.lastReattemptedAt || null,
       dateString: quiz.createdAt.toLocaleDateString('en-IN', {
         day: '2-digit',
         month: 'short',

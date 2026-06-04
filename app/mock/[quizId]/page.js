@@ -163,7 +163,7 @@ export default function SharedMockPage({ params }) {
                   </div>
                   
                   <div className="text-right shrink-0">
-                    <span className="text-emerald-400 font-bold">{player.score}/{player.total}</span>
+                    <span className="text-emerald-400 font-bold">{player.score * 2}/{player.total * 2} Marks</span>
                     <span className="text-zinc-600 text-[9px] ml-1.5 font-mono">({player.timeMinutes}m)</span>
                   </div>
                 </div>

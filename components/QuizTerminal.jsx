@@ -126,8 +126,9 @@ export default function QuizTerminal({ quizData, quizId, userId, imageBase64 = n
 
         <div className="grid grid-cols-3 gap-3 mb-8">
           <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 text-center">
-            <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Correct Answers</div>
-            <div className="text-lg font-bold text-white">{score} / {quizData.length}</div>
+            <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Final Score</div>
+            <div className="text-lg font-bold text-white">{score * 2} / {quizData.length * 2} Marks</div>
+            <div className="text-[9px] text-zinc-600 mt-0.5">({score} / {quizData.length} Qs correct)</div>
           </div>
           <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 text-center">
             <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Accuracy</div>
@@ -242,9 +243,14 @@ export default function QuizTerminal({ quizData, quizId, userId, imageBase64 = n
           <div>
             {/* Top HUD Header Status Track */}
             <div className="flex justify-between items-center border-b border-zinc-800 pb-3 mb-5 shrink-0">
-              <span className="px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-[10px] font-semibold text-zinc-300">
-                Question {currentIndex + 1} of {quizData.length}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-[10px] font-semibold text-zinc-300">
+                  Question {currentIndex + 1} of {quizData.length}
+                </span>
+                <span className="px-2 py-0.5 rounded bg-zinc-900/50 border border-zinc-900 text-[9px] font-bold text-zinc-500 font-mono">
+                  +2 MARKS
+                </span>
+              </div>
               <div className="flex items-center gap-3">
                 {hasNotes && (
                   <button 
