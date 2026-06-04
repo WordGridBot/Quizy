@@ -127,7 +127,7 @@ You must respond ONLY with a raw, valid JSON object following this exact syntax:
     def generate_mcq():
         try:
             return nvidia.chat.completions.create(
-                model="nvidia/llama-3.3-nemotron-super-49b-v1.5",
+                model="meta/llama-3.3-70b-instruct",
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": f"Here is the raw extracted text from the study notes:\n\n{raw_text}"}
