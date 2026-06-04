@@ -87,12 +87,12 @@ async def analyze(
             print(f"OCR extraction failed for page: {str(e)}")
             raise e
 
-    # Run all OCR calls in parallel using native asyncio.to_thread
-    ocr_futures = [
-        asyncio.to_thread(ocr_single, img)
-        for img in body.imagesBase64
-    ]
-    ocr_results = await asyncio.gather(*ocr_futures)
+    # Run all OCR calls sequentially one-by-one to avoid hitting concurrency limits on the free tier
+    ocr_results = []
+    for idx, img in enumerate(body.imagesBase64):
+        print(f"Processing page {idx + 1} of {len(body.imagesBase64)}...")
+        page_text = await asyncio.to_thread(ocr_single, img)
+        ocr_results.append(page_text)
     raw_text = "\n\n--- NEXT NOTE PAGE ---\n\n".join(ocr_results)
 
     if not raw_text.strip():
