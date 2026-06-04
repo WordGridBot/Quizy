@@ -33,6 +33,10 @@ export default function DashboardPage() {
   const [isMixing, setIsMixing] = useState(false);
   const [notesPreviewImage, setNotesPreviewImage] = useState(null);
 
+  // Multiple image queue states
+  const [uploadedFiles, setUploadedFiles] = useState([]);
+  const [isDragging, setIsDragging] = useState(false);
+
   // 1. Lifecycle verification: Check if session cookie is active on load
   useEffect(() => {
     async function verifySession() {
@@ -115,24 +119,45 @@ export default function DashboardPage() {
     });
   };
 
-  // 3. Handle File Upload conversion and dispatch pipeline execution
-  const handleImageUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+  // Select multiple files
+  const handleFileSelection = (files) => {
+    if (!files) return;
+    const fileArray = Array.from(files).filter(file => file.type.startsWith('image/'));
+    const newFiles = fileArray.map(file => ({
+      file,
+      previewUrl: URL.createObjectURL(file)
+    }));
+    setUploadedFiles(prev => [...prev, ...newFiles]);
+  };
 
-    setUploadStatus('Compressing image for processing...');
+  // Remove file from queue
+  const handleRemoveFile = (index) => {
+    setUploadedFiles(prev => {
+      const updated = [...prev];
+      URL.revokeObjectURL(updated[index].previewUrl);
+      updated.splice(index, 1);
+      return updated;
+    });
+  };
+
+  // Process all files in queue and generate quiz
+  const handleGenerateExam = async () => {
+    if (uploadedFiles.length === 0) return;
+
+    setUploadStatus('Compressing queued note images...');
     setIsScanning(true);
 
     try {
-      const base64RawString = await compressImage(file);
+      const compressionPromises = uploadedFiles.map(f => compressImage(f.file));
+      const base64Array = await Promise.all(compressionPromises);
 
-      setUploadStatus('Running AI analysis pipeline (OCR + Synth)...');
+      setUploadStatus('Running AI OCR + Synthesis (this may take up to 45 seconds)...');
       
       const res = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          imageBase64: base64RawString, 
+          imagesBase64: base64Array, 
           userId: user?.id,
           examType,
           subject,
@@ -146,9 +171,13 @@ export default function DashboardPage() {
 
       setGeneratedQuiz(data.quizData);
       setCurrentQuizId(data.quizId);
-      setQuizImageBase64(base64RawString);
-      setQuizImagesBase64(null); // Reset mixed images
+      setQuizImageBase64(base64Array[0] || null);
+      setQuizImagesBase64(base64Array);
       setUploadStatus('Analysis complete — quiz generated successfully.');
+      
+      // Clean up local blob URLs
+      uploadedFiles.forEach(f => URL.revokeObjectURL(f.previewUrl));
+      setUploadedFiles([]);
       
       // Refresh local cache metrics
       fetchHistoryAndVault();
@@ -375,22 +404,83 @@ export default function DashboardPage() {
 
               {/* Upload panel */}
               <div className="glass-card p-5 bg-zinc-950">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-white mb-2">Upload Revision Image</h3>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-white mb-2">Upload Revision Images</h3>
                 <p className="text-xs text-zinc-500 leading-relaxed mb-4">
-                  Upload study notes, textbook pages, or mock answers. The AI will parse details and synthesis questions based on the parameters above.
+                  Drag & drop or select multiple study note images. Click "Generate Exam" to analyze all pages together.
                 </p>
                 
-                <label className={`w-full h-28 border border-dashed rounded-lg flex flex-col items-center justify-center gap-1.5 cursor-pointer transition ${
-                  isScanning 
-                    ? 'border-zinc-800 bg-zinc-900/30 opacity-60 pointer-events-none' 
-                    : 'border-zinc-800 bg-zinc-900/10 hover:border-zinc-700 hover:bg-zinc-900/20'
-                }`}>
-                  <Upload className={`w-6 h-6 ${isScanning ? 'text-zinc-500 animate-bounce' : 'text-zinc-500'}`} />
-                  <span className="text-[11px] text-zinc-400 font-semibold">
-                    {isScanning ? 'AI OCR scanning notes...' : 'Select study note image'}
-                  </span>
-                  <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={isScanning} />
-                </label>
+                <div 
+                  onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                  onDragLeave={() => setIsDragging(false)}
+                  onDrop={(e) => { e.preventDefault(); setIsDragging(false); handleFileSelection(e.dataTransfer.files); }}
+                  className={`w-full h-28 border border-dashed rounded-lg flex flex-col items-center justify-center gap-1.5 transition ${
+                    isScanning 
+                      ? 'border-zinc-800 bg-zinc-900/30 opacity-60 pointer-events-none' 
+                      : isDragging 
+                        ? 'border-white bg-zinc-900/40'
+                        : 'border-zinc-800 bg-zinc-900/10 hover:border-zinc-700 hover:bg-zinc-900/20'
+                  }`}
+                >
+                  <label className="w-full h-full flex flex-col items-center justify-center cursor-pointer select-none">
+                    <Upload className={`w-6 h-6 mb-1.5 ${isScanning ? 'text-zinc-500 animate-bounce' : 'text-zinc-500'}`} />
+                    <span className="text-[11px] text-zinc-400 font-semibold">
+                      {isScanning ? 'AI OCR extracting...' : 'Drag & drop or Click to select'}
+                    </span>
+                    <span className="text-[9px] text-zinc-600 font-mono mt-0.5">Supports JPG, PNG, WEBP</span>
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      multiple 
+                      className="hidden" 
+                      onChange={(e) => handleFileSelection(e.target.files)} 
+                      disabled={isScanning} 
+                    />
+                  </label>
+                </div>
+
+                {/* Queue Display */}
+                {uploadedFiles.length > 0 && (
+                  <div className="mt-4 space-y-2.5">
+                    <div className="flex justify-between items-center text-[10px] text-zinc-500 uppercase tracking-wider font-bold">
+                      <span>Queued Pages ({uploadedFiles.length})</span>
+                      <button 
+                        type="button"
+                        onClick={() => { uploadedFiles.forEach(f => URL.revokeObjectURL(f.previewUrl)); setUploadedFiles([]); }}
+                        className="text-red-400 hover:text-red-300 transition text-[9px]"
+                      >
+                        Clear All
+                      </button>
+                    </div>
+                    
+                    <div className="grid grid-cols-4 gap-2">
+                      {uploadedFiles.map((fileObj, idx) => (
+                        <div key={idx} className="relative group rounded border border-zinc-900 bg-zinc-950 overflow-hidden h-12 flex items-center justify-center">
+                          <img 
+                            src={fileObj.previewUrl} 
+                            alt="Note page" 
+                            className="w-full h-full object-cover opacity-50 group-hover:opacity-100 transition"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveFile(idx)}
+                            className="absolute top-0.5 right-0.5 p-0.5 rounded-full bg-black/80 border border-zinc-800 text-zinc-400 hover:text-white transition"
+                          >
+                            <X className="w-2.5 h-2.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleGenerateExam}
+                      disabled={isScanning}
+                      className="w-full py-2 bg-white hover:bg-zinc-200 text-black text-xs font-bold rounded-lg transition"
+                    >
+                      {isScanning ? 'AI processing...' : 'Generate Exam from Notes'}
+                    </button>
+                  </div>
+                )}
 
                 {uploadStatus && (
                   <div className="mt-3 bg-zinc-900/50 border border-zinc-900 rounded p-2 text-center">

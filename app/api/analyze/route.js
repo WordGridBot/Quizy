@@ -15,33 +15,45 @@ const client = new MongoClient(process.env.MONGODB_URI);
 
 export async function POST(request) {
   try {
-    const { imageBase64, userId, examType = 'SSC CGL', subject = 'Mixed', questionCount = 5 } = await request.json();
+    const { imageBase64, imagesBase64, userId, examType = 'SSC CGL', subject = 'Mixed', questionCount = 5 } = await request.json();
 
-    if (!imageBase64) {
-      return NextResponse.json({ error: "No image provided" }, { status: 400 });
+    // Compile into base64 array for multi-page processing
+    let base64Array = [];
+    if (imagesBase64 && Array.isArray(imagesBase64)) {
+      base64Array = imagesBase64;
+    } else if (imageBase64) {
+      base64Array = [imageBase64];
     }
 
-    // --- PIPELINE STEP 1: Highly Accurate Raw OCR Extraction ---
-    // We use a specialized parsing/vision architecture to pull every single letter cleanly
-    const ocrResponse = await nvidia.chat.completions.create({
-      model: "nvidia/nemotron-ocr-v1", 
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "text", text: "Extract all text, lists, vocabulary words, and handwritten notes from this image with absolute precision. Do not summarize or format. Return the raw data text." },
-            {
-              type: "image_url",
-              image_url: { url: `data:image/jpeg;base64,${imageBase64}` }
-            }
-          ]
-        }
-      ]
+    if (base64Array.length === 0) {
+      return NextResponse.json({ error: "No image(s) provided" }, { status: 400 });
+    }
+
+    // --- PIPELINE STEP 1: Highly Accurate Raw Multimodal Extraction ---
+    // Process all uploaded images concurrently using a supported active multimodal model
+    const ocrPromises = base64Array.map(async (imgBase64, idx) => {
+      const ocrResponse = await nvidia.chat.completions.create({
+        model: "meta/llama-3.2-11b-vision-instruct", 
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "Extract all text, lists, facts, vocabulary words, and handwritten notes from this image with absolute precision. Do not summarize or format. Return only raw text data." },
+              {
+                type: "image_url",
+                image_url: { url: `data:image/jpeg;base64,${imgBase64}` }
+              }
+            ]
+          }
+        ]
+      });
+      return ocrResponse.choices[0].message.content || '';
     });
 
-    const rawExtractedText = ocrResponse.choices[0].message.content;
+    const ocrResults = await Promise.all(ocrPromises);
+    const rawExtractedText = ocrResults.join('\n\n--- NEXT NOTE PAGE ---\n\n');
 
-    if (!rawExtractedText) {
+    if (!rawExtractedText || rawExtractedText.trim().length === 0) {
       return NextResponse.json({ error: "OCR extraction step yielded zero usable data" }, { status: 422 });
     }
 
@@ -89,7 +101,8 @@ export async function POST(request) {
       creatorId: userId || 'anonymous',
       createdAt: new Date(),
       questions: structuredOutput.quiz,
-      imageBase64: imageBase64,
+      imageBase64: base64Array[0] || null, // fallback for legacy code
+      imagesBase64: base64Array, // save all uploaded images
       examType: examType,
       subject: subject,
       questionCount: Number(questionCount),
