@@ -24,7 +24,7 @@ function getSessionUser() {
 // ==========================================
 export async function POST(request) {
   try {
-    const { quizId, score, totalQuestions, timeSpentSeconds, guestName } = await request.json();
+    const { quizId, score, correctCount, incorrectCount, totalQuestions, timeSpentSeconds, guestName } = await request.json();
 
     if (!quizId || score === undefined || !totalQuestions) {
       return NextResponse.json({ error: "Missing essential score metrics" }, { status: 400 });
@@ -57,12 +57,14 @@ export async function POST(request) {
     const isReattempt = !!existingAttempt;
 
     // Calculate immediate performance accuracy percentage
-    const accuracyPercentage = Math.round((score / totalQuestions) * 100);
+    const accuracyPercentage = Math.round(((correctCount !== undefined ? correctCount : score) / totalQuestions) * 100);
 
     // Build standard score logging payload
     const finalScoreLog = {
       quizId: new ObjectId(quizId),
       score: Number(score),
+      correctCount: correctCount !== undefined ? Number(correctCount) : Number(score),
+      incorrectCount: incorrectCount !== undefined ? Number(incorrectCount) : 0,
       totalQuestions: Number(totalQuestions),
       accuracy: accuracyPercentage,
       timeSpentSeconds: Number(timeSpentSeconds) || 0,
@@ -147,13 +149,12 @@ export async function GET() {
 
     const userQuizzes = userQuizzesRaw.map(quiz => ({
       quizId: quiz._id,
+      creatorId: quiz.creatorId || 'anonymous',
       createdAt: quiz.createdAt,
       title: quiz.title || `${quiz.examType || 'SSC CGL'} - ${quiz.subject || 'Mixed'} Quiz`,
       examType: quiz.examType || 'SSC CGL',
       subject: quiz.subject || 'Mixed',
       questionCount: quiz.questionCount || (quiz.questions ? quiz.questions.length : 0),
-      imageBase64: quiz.imageBase64 || null,
-      imagesBase64: quiz.imagesBase64 || null,
       isMixed: quiz.isMixed || false,
       lastAttemptedAt: quiz.lastAttemptedAt || null,
       lastReattemptedAt: quiz.lastReattemptedAt || null,
@@ -168,6 +169,7 @@ export async function GET() {
     return NextResponse.json({
       success: true,
       username: sessionUser.username,
+      userId: sessionUser.userId,
       totalAttemptsRecorded: performanceTrackingLines.length,
       history: performanceTrackingLines,
       createdQuizzes: userQuizzes

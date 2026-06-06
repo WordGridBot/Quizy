@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import clientPromise from '@/lib/mongodb';
 import { cookies } from 'next/headers';
 import jwt from 'jsonwebtoken';
+import { ObjectId } from 'mongodb';
+import { uploadQuizToGithub } from '@/lib/githubStorage';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,24 +30,37 @@ export async function POST(request) {
       return NextResponse.json({ error: "Missing quiz questions" }, { status: 400 });
     }
 
+    const quizId = new ObjectId();
+
+    // 1. Upload heavy questions + images payload to GitHub Repository CDN
+    let githubPath = null;
+    try {
+      githubPath = await uploadQuizToGithub(quizId.toString(), {
+        questions,
+        imagesBase64: imagesBase64 || []
+      });
+    } catch (githubErr) {
+      console.error("Failed to commit quiz payload to GitHub:", githubErr);
+      return NextResponse.json({ error: "GitHub CDN storage failed: " + githubErr.message }, { status: 502 });
+    }
+
     const client = await clientPromise;
     const db = client.db('cgl_core_db');
 
-    // Store the quiz master document
+    // 2. Store only the lightweight metadata document in MongoDB
     const quizDoc = await db.collection('quizzes').insertOne({
+      _id: quizId,
       title: title || `${examType} - ${subject} Quiz`,
       creatorId: creatorId,
       createdAt: new Date(),
-      questions: questions,
-      imageBase64: imagesBase64?.[0] || null,
-      imagesBase64: imagesBase64 || [],
+      githubPath: githubPath,
       examType: examType || 'SSC CGL',
       subject: subject || 'Mixed',
       questionCount: questions.length,
       sharedWith: []
     });
 
-    // Bulk log words into Vocab Vault if provided
+    // 3. Bulk log words into Vocab Vault if provided (keeps them searchable in DB)
     if (vocabWords && Array.isArray(vocabWords) && vocabWords.length > 0) {
       const vocabItems = vocabWords.map(v => ({
         userId: creatorId,
@@ -60,7 +75,7 @@ export async function POST(request) {
 
     return NextResponse.json({
       success: true,
-      quizId: quizDoc.insertedId
+      quizId: quizId.toString()
     }, { status: 201 });
 
   } catch (error) {

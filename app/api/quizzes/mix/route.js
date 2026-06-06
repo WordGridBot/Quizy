@@ -3,6 +3,7 @@ import clientPromise from '@/lib/mongodb';
 import { cookies } from 'next/headers';
 import jwt from 'jsonwebtoken';
 import { ObjectId } from 'mongodb';
+import { fetchQuizFromGithub, uploadQuizToGithub } from '@/lib/githubStorage';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,22 +41,44 @@ export async function POST(request) {
       return NextResponse.json({ error: "Invalid quiz IDs provided" }, { status: 400 });
     }
 
-    // Fetch original quizzes
-    const originalQuizzes = await db.collection('quizzes')
+    // Fetch original quizzes metadata
+    const originalQuizzesRaw = await db.collection('quizzes')
       .find({ _id: { $in: objectIds } })
       .toArray();
 
-    if (originalQuizzes.length === 0) {
+    if (originalQuizzesRaw.length === 0) {
       return NextResponse.json({ error: "No matching quizzes found in database" }, { status: 404 });
     }
+
+    // Fetch full quiz payloads from GitHub CDN / local DB in parallel
+    const resolvedQuizzes = await Promise.all(
+      originalQuizzesRaw.map(async (quiz) => {
+        let questions = quiz.questions || [];
+        let imagesBase64 = quiz.imagesBase64 || [];
+
+        if (quiz.githubPath) {
+          try {
+            const payload = await fetchQuizFromGithub(quiz.githubPath);
+            questions = payload.questions || [];
+            imagesBase64 = payload.imagesBase64 || [];
+          } catch (githubErr) {
+            console.error(`Failed to fetch quiz payload from GitHub for path ${quiz.githubPath}:`, githubErr);
+          }
+        }
+        return {
+          ...quiz,
+          questions,
+          imagesBase64
+        };
+      })
+    );
 
     // Pool questions and images
     let pooledQuestions = [];
     let imagesPool = [];
 
-    originalQuizzes.forEach(quiz => {
+    resolvedQuizzes.forEach(quiz => {
       if (quiz.questions && Array.isArray(quiz.questions)) {
-        // Tag questions with original quiz details if necessary (e.g. for explanation context)
         const questionsWithContext = quiz.questions.map(q => ({
           ...q,
           sourceQuizId: quiz._id.toString()
@@ -63,9 +86,7 @@ export async function POST(request) {
         pooledQuestions = pooledQuestions.concat(questionsWithContext);
       }
       
-      if (quiz.imageBase64) {
-        imagesPool.push(quiz.imageBase64);
-      } else if (quiz.imagesBase64 && Array.isArray(quiz.imagesBase64)) {
+      if (quiz.imagesBase64 && Array.isArray(quiz.imagesBase64)) {
         imagesPool = imagesPool.concat(quiz.imagesBase64);
       }
     });
@@ -87,13 +108,27 @@ export async function POST(request) {
     const limitCount = questionCount ? Number(questionCount) : pooledQuestions.length;
     const finalQuestions = pooledQuestions.slice(0, limitCount);
 
-    // Save consolidated mixed quiz doc
-    const mixedQuizDoc = await db.collection('quizzes').insertOne({
+    const mixedQuizId = new ObjectId();
+
+    // Save mixed quiz JSON payload to GitHub CDN
+    let githubPath = null;
+    try {
+      githubPath = await uploadQuizToGithub(mixedQuizId.toString(), {
+        questions: finalQuestions,
+        imagesBase64: uniqueImages
+      });
+    } catch (githubErr) {
+      console.error("Failed to commit mixed quiz payload to GitHub:", githubErr);
+      return NextResponse.json({ error: "GitHub CDN storage failed: " + githubErr.message }, { status: 502 });
+    }
+
+    // Save consolidated mixed quiz metadata in MongoDB
+    await db.collection('quizzes').insertOne({
+      _id: mixedQuizId,
       title: title || 'Mixed Revision',
       creatorId,
       createdAt: new Date(),
-      questions: finalQuestions,
-      imagesBase64: uniqueImages, // Store as array of base64 strings
+      githubPath,
       examType: 'Mixed Revision',
       subject: 'Combined Topics',
       questionCount: finalQuestions.length,
@@ -103,7 +138,7 @@ export async function POST(request) {
 
     return NextResponse.json({
       success: true,
-      quizId: mixedQuizDoc.insertedId,
+      quizId: mixedQuizId.toString(),
       questionCount: finalQuestions.length
     }, { status: 201 });
 

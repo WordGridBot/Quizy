@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { Upload, BookOpen, Award, LogOut, FileText, CheckCircle2, Clock, TrendingUp, Shuffle, Eye, X, Sliders, Check, Share2 } from 'lucide-react';
 import QuizTerminal from '@/components/QuizTerminal';
-import VocabVault from '@/components/VocabVault';
 import AuthForm from '@/components/AuthForm';
 
 const ShareButton = ({ quizId }) => {
@@ -38,7 +37,7 @@ export default function DashboardPage() {
   const [authChecked, setAuthChecked] = useState(false);
 
   // Layout presentation states
-  const [activeTab, setActiveTab] = useState('terminal'); // terminal, vault, metrics
+  const [activeTab, setActiveTab] = useState('terminal'); // terminal, metrics, leaderboard
   const [isScanning, setIsScanning] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('');
 
@@ -47,9 +46,14 @@ export default function DashboardPage() {
   const [currentQuizId, setCurrentQuizId] = useState(null);
   const [quizImageBase64, setQuizImageBase64] = useState(null);
   const [quizImagesBase64, setQuizImagesBase64] = useState(null);
-  const [vaultWords, setVaultWords] = useState([]);
   const [historicalLogs, setHistoricalLogs] = useState([]);
   const [createdQuizzes, setCreatedQuizzes] = useState([]);
+
+  // Global leaderboard & renaming states
+  const [globalLeaderboard, setGlobalLeaderboard] = useState([]);
+  const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
+  const [editingQuizId, setEditingQuizId] = useState(null);
+  const [editTitleText, setEditTitleText] = useState('');
 
   // Advanced feature inputs
   const [examType, setExamType] = useState('SSC CGL');
@@ -64,6 +68,10 @@ export default function DashboardPage() {
   const [reviewTitle, setReviewTitle] = useState('');
   const [keepCount, setKeepCount] = useState(5);
   const [isSavingQuiz, setIsSavingQuiz] = useState(false);
+
+  // Scanning simulation states
+  const [scanProgress, setScanProgress] = useState(0);
+  const [scanPhaseText, setScanPhaseText] = useState('');
 
   // Mix Modal States
   const [showMixModal, setShowMixModal] = useState(false);
@@ -105,7 +113,7 @@ export default function DashboardPage() {
         const res = await fetch('/api/scores'); // Re-using score GET route to confirm session state
         if (res.ok) {
           const data = await res.json();
-          setUser({ username: data.username });
+          setUser({ username: data.username, id: data.userId });
           fetchHistoryAndVault();
         }
       } catch (err) {
@@ -117,7 +125,7 @@ export default function DashboardPage() {
     verifySession();
   }, []);
 
-  // 2. Fetch User History, Quizzes and Words Vault from DB
+  // 2. Fetch User History and Quizzes from DB
   const fetchHistoryAndVault = async () => {
     try {
       const scoreRes = await fetch('/api/scores');
@@ -126,14 +134,44 @@ export default function DashboardPage() {
         setHistoricalLogs(scoreData.history || []);
         setCreatedQuizzes(scoreData.createdQuizzes || []);
       }
-
-      const vocabRes = await fetch('/api/vocab');
-      if (vocabRes.ok) {
-        const vocabData = await vocabRes.json();
-        setVaultWords(vocabData.vocabWords || []);
-      }
     } catch (err) {
       console.error("Failed to sync background metrics profiles:", err);
+    }
+  };
+
+  const fetchGlobalLeaderboard = async () => {
+    setLoadingLeaderboard(true);
+    try {
+      const res = await fetch('/api/leaderboard');
+      if (res.ok) {
+        const data = await res.json();
+        setGlobalLeaderboard(data.leaderboard || []);
+      }
+    } catch (err) {
+      console.error("Failed to load global leaderboard:", err);
+    } finally {
+      setLoadingLeaderboard(false);
+    }
+  };
+
+  const handleRenameQuiz = async (quizId) => {
+    if (!editTitleText.trim()) return;
+    try {
+      const res = await fetch(`/api/quizzes/${quizId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: editTitleText.trim() })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setCreatedQuizzes(prev => prev.map(q => q.quizId === quizId ? { ...q, title: data.title } : q));
+        setEditingQuizId(null);
+      } else {
+        alert(data.error || "Failed to rename quiz");
+      }
+    } catch (err) {
+      console.error("Rename error:", err);
+      alert("An error occurred while renaming the quiz");
     }
   };
 
@@ -152,6 +190,55 @@ export default function DashboardPage() {
     return () => clearInterval(interval);
   }, [user]);
 
+  useEffect(() => {
+    if (activeTab === 'leaderboard') {
+      fetchGlobalLeaderboard();
+    }
+  }, [activeTab]);
+
+  // 4. Scanning simulation progress tracker
+  useEffect(() => {
+    if (!isScanning) {
+      setScanProgress(0);
+      setScanPhaseText('');
+      return;
+    }
+
+    setScanProgress(1);
+    setScanPhaseText('Preparing study notes for parsing...');
+
+    const startTime = Date.now();
+
+    const interval = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      
+      let progress = 1;
+      let phase = 'Preparing study notes for parsing...';
+
+      if (elapsed < 3000) {
+        progress = Math.max(1, Math.round((elapsed / 3000) * 15));
+        phase = 'Preparing study notes for parsing...';
+      } else if (elapsed < 18000) {
+        progress = 15 + Math.round(((elapsed - 3000) / 15000) * 35);
+        phase = 'Extracting handwritten text via Llama Vision...';
+      } else if (elapsed < 28000) {
+        progress = 50 + Math.round(((elapsed - 18000) / 10000) * 20);
+        phase = 'Load balancing NVIDIA NIM pipeline...';
+      } else {
+        const ratio = Math.min((elapsed - 28000) / 25000, 1);
+        progress = 70 + Math.round(ratio * 28);
+        phase = 'Composing TCS-Pattern MCQs via Llama 3.3...';
+      }
+
+      // Clamp progress strictly between 1% and 98% while scanning is active
+      const finalProgress = Math.max(1, Math.min(progress, 98));
+      setScanProgress(finalProgress);
+      setScanPhaseText(phase);
+    }, 200);
+
+    return () => clearInterval(interval);
+  }, [isScanning]);
+
   // Client-side image compression utility
   const compressImage = (file) => {
     return new Promise((resolve, reject) => {
@@ -161,35 +248,53 @@ export default function DashboardPage() {
         const img = new Image();
         img.src = event.target.result;
         img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 1200;
-          const MAX_HEIGHT = 1200;
-          let width = img.width;
-          let height = img.height;
+          try {
+            const canvas = document.createElement('canvas');
+            const MAX_WIDTH = 1000;
+            const MAX_HEIGHT = 1000;
+            let width = img.width;
+            let height = img.height;
 
-          if (width > height) {
-            if (width > MAX_WIDTH) {
-              height = Math.round((height * MAX_WIDTH) / width);
-              width = MAX_WIDTH;
+            if (width > height) {
+              if (width > MAX_WIDTH) {
+                height = Math.round((height * MAX_WIDTH) / width);
+                width = MAX_WIDTH;
+              }
+            } else {
+              if (height > MAX_HEIGHT) {
+                width = Math.round((width * MAX_HEIGHT) / height);
+                height = MAX_HEIGHT;
+              }
             }
-          } else {
-            if (height > MAX_HEIGHT) {
-              width = Math.round((width * MAX_HEIGHT) / height);
-              height = MAX_HEIGHT;
+
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+
+            // Get compressed data URL (JPEG, 0.6 quality for Vercel size limit and OCR readability)
+            const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.6);
+            const base64 = compressedDataUrl.split(',')[1];
+            resolve(base64);
+          } catch (e) {
+            console.error("Canvas scaling error, falling back to raw Base64:", e);
+            const rawBase64 = event.target.result.split(',')[1];
+            if (rawBase64) {
+              resolve(rawBase64);
+            } else {
+              reject(e);
             }
           }
-
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, width, height);
-
-          // Get compressed data URL (JPEG, 0.75 quality for database efficiency)
-          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.75);
-          const base64 = compressedDataUrl.split(',')[1];
-          resolve(base64);
         };
-        img.onerror = (err) => reject(err);
+        img.onerror = (err) => {
+          console.error("Image loading error, falling back to raw Base64:", err);
+          const rawBase64 = event.target.result.split(',')[1];
+          if (rawBase64) {
+            resolve(rawBase64);
+          } else {
+            reject(new Error("Failed to load image for compression"));
+          }
+        };
       };
       reader.onerror = (err) => reject(err);
     });
@@ -198,7 +303,13 @@ export default function DashboardPage() {
   // Select multiple files
   const handleFileSelection = (files) => {
     if (!files) return;
-    const fileArray = Array.from(files).filter(file => file.type.startsWith('image/'));
+    // Mobile browsers may return empty type or application/octet-stream for custom camera formats (like HEIC/HEIF).
+    // Filter by either standard startsWith('image/') or filename extension.
+    const fileArray = Array.from(files).filter(file => {
+      const isImgType = file.type && file.type.startsWith('image/');
+      const hasImgExt = /\.(jpg|jpeg|png|webp|heic|heif)$/i.test(file.name);
+      return isImgType || hasImgExt;
+    });
     const newFiles = fileArray.map(file => ({
       file,
       previewUrl: URL.createObjectURL(file)
@@ -419,17 +530,17 @@ export default function DashboardPage() {
   // Tab configuration
   const tabs = [
     { id: 'terminal', label: 'Testing Portal' },
-    { id: 'vault', label: 'Vocab Vault' },
     { id: 'metrics', label: 'Quiz Repository' },
+    { id: 'leaderboard', label: 'Global Leaderboard' },
   ];
 
   // Hydration protection loader screen
   if (!authChecked) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
+      <div className="min-h-screen bg-transparent flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <div className="w-8 h-8 border-2 border-zinc-700 border-t-white rounded-full animate-spin" />
-          <span className="text-xs text-zinc-500 font-mono">Loading CGL Core...</span>
+          <span className="text-xs text-zinc-500 font-mono">Loading Quizy...</span>
         </div>
       </div>
     );
@@ -438,13 +549,14 @@ export default function DashboardPage() {
   // Enforce profile lock-in views if unauthenticated
   if (!user) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center px-4 py-12 relative">
-        <div className="absolute top-12 left-1/2 -translate-x-1/2 text-center select-none pointer-events-none">
+      <div className="min-h-screen bg-transparent flex items-center justify-center px-4 py-12 relative">
+        <div className="absolute top-12 left-1/2 -translate-x-1/2 text-center select-none pointer-events-none flex flex-col items-center">
+          <img src="/quizy.png" alt="Quizy Logo" className="h-12 w-auto mb-2" />
           <h1 className="text-2xl font-bold tracking-wider text-white">
-            CGL Core
+            Quizy
           </h1>
-          <p className="text-[10px] text-zinc-600 uppercase tracking-[0.25em] mt-1.5 font-semibold">
-            Competitive Exam Revision Engine
+          <p className="text-[10px] text-zinc-600 uppercase tracking-[0.25em] mt-1 font-semibold">
+            AI-Powered Exam Revision Platform
           </p>
         </div>
         <AuthForm onAuthSuccess={(profile) => { setUser(profile); fetchHistoryAndVault(); }} />
@@ -453,15 +565,15 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-black text-zinc-300 pb-16 flex flex-col font-sans selection:bg-zinc-800 selection:text-white">
+    <div className="min-h-screen bg-transparent text-zinc-300 pb-16 flex flex-col font-sans selection:bg-zinc-800 selection:text-white">
       
       {/* ==========================================
           PREMIUM HEADER
           ========================================== */}
       <header className="w-full bg-zinc-950 border-b border-zinc-900 px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4 sticky top-0 z-50">
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
-          <h1 className="text-base font-bold tracking-wider text-white">CGL Core</h1>
+        <div className="flex items-center gap-2.5">
+          <img src="/quizy.png" alt="Quizy Logo" className="h-6 w-auto" />
+          <h1 className="text-base font-bold tracking-wider text-white">Quizy</h1>
         </div>
 
         {/* Tab Navigation */}
@@ -605,7 +717,7 @@ export default function DashboardPage() {
                       accept="image/*" 
                       multiple 
                       className="hidden" 
-                      onChange={(e) => handleFileSelection(e.target.files)} 
+                      onChange={(e) => { handleFileSelection(e.target.files); e.target.value = ''; }} 
                       disabled={isScanning} 
                     />
                   </label>
@@ -676,6 +788,53 @@ export default function DashboardPage() {
                   imagesBase64={quizImagesBase64}
                   onCompleteRefresh={fetchHistoryAndVault}
                 />
+              ) : isScanning ? (
+                <div className="w-full glass-card p-8 bg-zinc-950 border border-zinc-800 animate-slide-up flex flex-col items-center justify-center min-h-[460px] relative overflow-hidden">
+                  {/* Grid background effect */}
+                  <div className="absolute inset-0 grid-bg opacity-30 select-none pointer-events-none" />
+                  
+                  {/* Glowing Sweep Scanner Radar */}
+                  <div className="w-40 h-40 rounded-full border border-zinc-900 bg-zinc-950 flex items-center justify-center relative shadow-[0_0_50px_rgba(255,255,255,0.02)] mb-8 select-none shrink-0 animate-pulse-glow">
+                    {/* Sweeper lines */}
+                    <div className="absolute inset-0.5 rounded-full border border-dashed border-zinc-800/80 animate-sweep" style={{ animationDuration: '6s' }} />
+                    <div className="absolute inset-2 rounded-full border border-dashed border-zinc-700/40 animate-sweep" style={{ animationDuration: '4s', animationDirection: 'reverse' }} />
+                    
+                    {/* Sweep Gradient Overlay */}
+                    <div className="absolute inset-0 bg-gradient-to-tr from-zinc-500/0 via-zinc-500/0 to-white/5 rounded-full animate-sweep" style={{ animationDuration: '4s' }} />
+                    
+                    {/* Inner core */}
+                    <div className="w-16 h-16 rounded-full bg-zinc-900 border border-zinc-850 flex items-center justify-center relative shadow-[0_0_20px_rgba(255,255,255,0.01)]">
+                      <BookOpen className="w-6 h-6 text-zinc-400 animate-pulse" />
+                    </div>
+                  </div>
+
+                  {/* Text Status HUD */}
+                  <div className="text-center relative z-10 w-full max-w-xs">
+                    <h3 className="text-xs font-bold text-white uppercase tracking-wider mb-2 flex items-center justify-center gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
+                      Quizy AI Vision Scan
+                    </h3>
+                    
+                    <p className="text-[11px] text-zinc-400 font-medium h-4 mb-5 leading-normal">
+                      {scanPhaseText}
+                    </p>
+
+                    {/* Progress Bar */}
+                    <div className="w-full h-1 bg-zinc-900 rounded-full overflow-hidden mb-6 relative">
+                      <div 
+                        className="h-full bg-gradient-to-r from-zinc-500 to-white rounded-full transition-all duration-300"
+                        style={{ width: `${scanProgress}%` }}
+                      />
+                    </div>
+
+                    {/* Scanning stats footer */}
+                    <div className="flex justify-between items-center text-[10px] text-zinc-500 border-t border-zinc-900 pt-3.5 font-mono">
+                      <span>PAGES LOADED: {uploadedFiles.length || 1}</span>
+                      <span>{scanProgress}% ANALYZED</span>
+                      <span>API ROUTING: SECURE</span>
+                    </div>
+                  </div>
+                </div>
               ) : rawExtractedQuiz ? (
                 <div className="w-full glass-card p-6 bg-zinc-950 border border-zinc-800 animate-slide-up">
                   <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-2 flex items-center gap-2">
@@ -744,7 +903,7 @@ export default function DashboardPage() {
                           setUploadStatus('');
                         }}
                         disabled={isSavingQuiz}
-                        className="cursor-pointer w-full py-2 px-3 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-white text-xs font-semibold rounded-lg transition"
+                        className="cursor-pointer w-full py-2 px-3 bg-zinc-900 hover:bg-zinc-800 border border-zinc-850 text-zinc-400 hover:text-white text-xs font-semibold rounded-lg transition"
                       >
                         Discard Entire Extraction
                       </button>
@@ -767,10 +926,88 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* VIEW 2: VOCABULARY VAULT */}
-        {activeTab === 'vault' && (
-          <div className="animate-fade-in bg-zinc-950 border border-zinc-900 rounded-xl overflow-hidden">
-            <VocabVault vocabularyItems={vaultWords} />
+        {/* VIEW 2: GLOBAL LEADERBOARD */}
+        {activeTab === 'leaderboard' && (
+          <div className="animate-fade-in glass-card p-6 bg-zinc-950 border border-zinc-800 rounded-xl max-w-4xl mx-auto">
+            <div className="flex items-center gap-3 border-b border-zinc-900 pb-4 mb-6">
+              <div className="p-2 bg-amber-500/10 rounded-lg text-amber-400">
+                <Award className="w-6 h-6" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-white">Global Standings</h2>
+                <p className="text-[11px] text-zinc-500 mt-0.5">
+                  Cumulative highest marks and activity across all students.
+                </p>
+              </div>
+            </div>
+
+            {loadingLeaderboard ? (
+              <div className="py-12 flex flex-col items-center justify-center">
+                <div className="w-6 h-6 border-2 border-zinc-700 border-t-white rounded-full animate-spin" />
+                <p className="text-[10px] text-zinc-500 font-mono mt-3">Fetching standings...</p>
+              </div>
+            ) : globalLeaderboard.length === 0 ? (
+              <div className="text-center py-12 border border-zinc-900 rounded-lg">
+                <p className="text-xs text-zinc-500">No student records found</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-zinc-900 text-zinc-500 font-medium">
+                      <th className="py-2.5 px-3 font-semibold text-[10px] uppercase tracking-wider">Rank</th>
+                      <th className="py-2.5 px-3 font-semibold text-[10px] uppercase tracking-wider">Student</th>
+                      <th className="py-2.5 px-3 font-semibold text-[10px] uppercase tracking-wider text-center">Total Attempts</th>
+                      <th className="py-2.5 px-3 font-semibold text-[10px] uppercase tracking-wider text-center">Unique Quizzes</th>
+                      <th className="py-2.5 px-3 font-semibold text-[10px] uppercase tracking-wider text-right">Cumulative High Score</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {globalLeaderboard.map((player) => {
+                      const isCurrentUser = player.username === user?.username;
+                      return (
+                        <tr 
+                          key={player.rank}
+                          className={`border-b border-zinc-900/60 hover:bg-zinc-900/10 transition ${
+                            isCurrentUser 
+                              ? 'bg-indigo-500/5 font-semibold text-white' 
+                              : 'text-zinc-400'
+                          }`}
+                        >
+                          <td className="py-3 px-3">
+                            <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                              player.rank === 1 ? 'bg-amber-500/15 text-amber-400 border border-amber-500/20' :
+                              player.rank === 2 ? 'bg-zinc-300/10 text-zinc-300' :
+                              player.rank === 3 ? 'bg-amber-700/10 text-amber-600' : 'bg-transparent text-zinc-500'
+                            }`}>
+                              {player.rank}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 flex items-center gap-2">
+                            <span className="truncate max-w-[150px]">{player.username}</span>
+                            {player.isGuest && (
+                              <span className="text-[8px] px-1 bg-zinc-900 border border-zinc-800 text-zinc-500 font-bold rounded">
+                                GUEST
+                              </span>
+                            )}
+                            {isCurrentUser && (
+                              <span className="text-[8px] px-1 bg-indigo-500/20 text-indigo-300 font-bold rounded">
+                                YOU
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 text-center font-mono">{player.totalAttempts}</td>
+                          <td className="py-3 px-3 text-center font-mono">{player.uniqueQuizzes}</td>
+                          <td className="py-3 px-3 text-right font-bold text-emerald-400 font-mono">
+                            {player.totalHighestMarks} Marks
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
 
@@ -856,14 +1093,55 @@ export default function DashboardPage() {
 
                             {/* Meta texts */}
                             <div className="min-w-0 flex-grow">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="text-xs font-semibold text-white truncate max-w-[200px]" title={quiz.title}>
-                                  {quiz.title}
-                                </span>
-                                <span className="px-1.5 py-0.2 bg-zinc-900 border border-zinc-800 text-[8px] font-bold rounded text-zinc-400 uppercase tracking-wide">
-                                  {quiz.subject}
-                                </span>
-                              </div>
+                              {editingQuizId === quiz.quizId ? (
+                                <div className="flex items-center gap-1.5 min-w-0 flex-grow" onClick={(e) => e.stopPropagation()}>
+                                  <input
+                                    type="text"
+                                    value={editTitleText}
+                                    onChange={(e) => setEditTitleText(e.target.value)}
+                                    className="glass-input px-2 py-1 text-[11px] font-semibold w-full focus:outline-none"
+                                    autoFocus
+                                  />
+                                  <button
+                                    onClick={() => handleRenameQuiz(quiz.quizId)}
+                                    className="p-1 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 transition"
+                                    title="Save Title"
+                                  >
+                                    <Check className="w-3 h-3" />
+                                  </button>
+                                  <button
+                                    onClick={() => setEditingQuizId(null)}
+                                    className="p-1 rounded bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white transition"
+                                    title="Cancel"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                                  <span className="text-xs font-semibold text-white truncate max-w-[200px]" title={quiz.title}>
+                                    {quiz.title}
+                                  </span>
+                                  {quiz.creatorId === user?.id && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setEditingQuizId(quiz.quizId);
+                                        setEditTitleText(quiz.title);
+                                      }}
+                                      className="p-0.5 rounded text-zinc-500 hover:text-white transition animate-fade-in"
+                                      title="Rename Quiz"
+                                    >
+                                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                      </svg>
+                                    </button>
+                                  )}
+                                  <span className="px-1.5 py-0.2 bg-zinc-900 border border-zinc-800 text-[8px] font-bold rounded text-zinc-400 uppercase tracking-wide">
+                                    {quiz.subject}
+                                  </span>
+                                </div>
+                              )}
                               <p className="text-[10px] text-zinc-500 mt-0.5">
                                 {quiz.questionCount} Questions &bull; Created: {quiz.dateString}
                               </p>

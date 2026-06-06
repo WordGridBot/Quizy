@@ -1,5 +1,6 @@
 import { Inter } from "next/font/google";
 import "./globals.css";
+import StarField from "@/components/StarField";
 
 const inter = Inter({ 
   subsets: ["latin"],
@@ -7,14 +8,20 @@ const inter = Inter({
 });
 
 export const metadata = {
-  title: "CGL Core | AI-Powered Exam Revision Platform",
-  description: "Transform handwritten notes into TCS-pattern mock exams with AI vision. SSC CGL preparation reimagined with glassmorphic design.",
+  title: "Quizy | AI-Powered Exam Revision Platform",
+  description: "Transform handwritten notes into mock exams with AI vision. Study notes preparation reimagined with Quizy.",
+  icons: {
+    icon: "/quizy.png",
+  }
 };
 
 export default function RootLayout({ children }) {
   return (
     <html lang="en" className={`${inter.variable} scroll-smooth`}>
       <body className="min-h-screen flex flex-col antialiased selection:bg-indigo-400/20 selection:text-indigo-200">
+        
+        {/* Animated Twinkling & Shooting Star Field */}
+        <StarField />
         
         {/* Ambient plasma glow blobs — floating gradient orbs behind glass panels */}
         <div className="ambient-blob blob-1" aria-hidden="true" />
@@ -23,7 +30,7 @@ export default function RootLayout({ children }) {
 
         {/* Subtle dot grid texture overlay */}
         <div 
-          className="fixed inset-0 pointer-events-none z-0 opacity-[0.03]" 
+          className="fixed inset-0 pointer-events-none z-0 opacity-[0.06]" 
           style={{
             backgroundImage: "radial-gradient(circle, rgba(255,255,255,0.8) 1px, transparent 1px)",
             backgroundSize: "32px 32px"

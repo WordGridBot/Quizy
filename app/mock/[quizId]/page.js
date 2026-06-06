@@ -55,7 +55,7 @@ export default function SharedMockPage({ params }) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
+      <div className="min-h-screen bg-transparent flex items-center justify-center">
         <div className="flex flex-col items-center">
           <div className="w-8 h-8 border-2 border-zinc-700 border-t-white rounded-full animate-spin" />
           <p className="text-zinc-500 text-xs font-mono mt-4">Loading shared quiz...</p>
@@ -66,7 +66,7 @@ export default function SharedMockPage({ params }) {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-black flex flex-col items-center justify-center p-4">
+      <div className="min-h-screen bg-transparent flex flex-col items-center justify-center p-4">
         <div className="glass-card p-8 max-w-sm text-center border border-red-950 bg-zinc-950">
           <ShieldAlert className="w-12 h-12 text-red-500 mx-auto mb-3" />
           <h3 className="text-sm font-bold text-white">Access Failed</h3>
@@ -80,14 +80,18 @@ export default function SharedMockPage({ params }) {
   }
 
   return (
-    <div className="min-h-screen bg-black text-zinc-300 pb-16 flex flex-col font-sans">
+    <div className="min-h-screen bg-transparent text-zinc-300 pb-16 flex flex-col font-sans">
       
       {/* Mini top HUD header */}
       <header className="bg-zinc-950 border-b border-zinc-900 px-6 py-4 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2 text-xs font-semibold text-zinc-400 hover:text-white transition">
           <ArrowLeft className="w-3.5 h-3.5" /> Back to Dashboard
         </Link>
-        <span className="text-zinc-600 text-[10px] font-mono">{quizId}</span>
+        <div className="flex items-center gap-2 select-none pointer-events-none">
+          <img src="/quizy.png" alt="Quizy Logo" className="h-5 w-auto" />
+          <span className="text-xs font-bold text-white tracking-wide">Quizy</span>
+        </div>
+        <span className="text-zinc-600 text-[10px] font-mono hidden sm:inline">{quizId}</span>
       </header>
 
       <div className={`max-w-7xl w-full mx-auto px-6 mt-8 grid grid-cols-1 ${isGuestVerified && (quizImageBase64 || quizImagesBase64) ? 'lg:grid-cols-12' : 'lg:grid-cols-3'} gap-6 items-start`}>
@@ -163,7 +167,9 @@ export default function SharedMockPage({ params }) {
                   </div>
                   
                   <div className="text-right shrink-0">
-                    <span className="text-emerald-400 font-bold">{player.score * 2}/{player.total * 2} Marks</span>
+                    <span className="text-emerald-400 font-bold">
+                      {player.correctCount !== undefined ? player.score : (player.score * 2)}/{player.total * 2} Marks
+                    </span>
                     <span className="text-zinc-600 text-[9px] ml-1.5 font-mono">({player.timeMinutes}m)</span>
                   </div>
                 </div>
