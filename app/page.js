@@ -250,8 +250,8 @@ export default function DashboardPage() {
         img.onload = () => {
           try {
             const canvas = document.createElement('canvas');
-            const MAX_WIDTH = 1000;
-            const MAX_HEIGHT = 1000;
+            const MAX_WIDTH = 2000;
+            const MAX_HEIGHT = 2000;
             let width = img.width;
             let height = img.height;
 
@@ -272,8 +272,8 @@ export default function DashboardPage() {
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, width, height);
 
-            // Get compressed data URL (JPEG, 0.6 quality for Vercel size limit and OCR readability)
-            const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.6);
+            // Get compressed data URL (JPEG, 0.85 quality for Vercel size limit and high-quality OCR readability)
+            const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
             const base64 = compressedDataUrl.split(',')[1];
             resolve(base64);
           } catch (e) {

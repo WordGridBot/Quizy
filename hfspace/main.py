@@ -48,6 +48,19 @@ if GROQ_API_KEY:
 else:
     print("Warning: GROQ_API_KEY environment variable is missing. Will fall back to NVIDIA for MCQ generation.", flush=True)
 
+# Google AI Studio / Gemini API initialization
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", os.environ.get("GOOGLE_API_KEY", "")).strip()
+gemini_client = None
+if GEMINI_API_KEY:
+    print("GEMINI_API_KEY detected. Initializing Google AI Studio client.", flush=True)
+    gemini_client = OpenAI(
+        api_key=GEMINI_API_KEY,
+        base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+        timeout=180.0
+    )
+else:
+    print("Warning: GEMINI_API_KEY environment variable is missing. Google AI Studio pipeline will be skipped.", flush=True)
+
 class AnalyzeRequest(BaseModel):
     imagesBase64: list[str]
     userId: str = "anonymous"
@@ -75,6 +88,58 @@ async def analyze(
     print(f"[{datetime.utcnow()}] Received analyze request for User ID: {body.userId}", flush=True)
     print(f"Parameters: Exam={body.examType}, Subject={body.subject}", flush=True)
     print(f"Processing {len(body.imagesBase64)} note images...", flush=True)
+
+    # --- PREFERRED SINGLE-STAGE: Google AI Studio Gemma 4 Vision Pipeline ---
+    if gemini_client:
+        print(f"[{datetime.utcnow()}] Using Google AI Studio Gemma 4 Vision pipeline...", flush=True)
+        try:
+            gemini_model = os.environ.get("GEMINI_MODEL", "gemma-4-31b")
+            content = [
+                {
+                    "type": "text",
+                    "text": f"You are an expert {body.examType} Content Generator. Review all the provided note/textbook images and perform two tasks:\n"
+                           f"1. Extract all high-priority English vocabulary words or advanced facts found in the images.\n"
+                           f"2. Construct as many tough Multiple Choice Questions (MCQs) as possible from the images, mimicking the TCS examination style for the subject/section \"{body.subject}\".\n"
+                           f"DO NOT exceed 25 MCQs.\n\n"
+                           f"You must respond ONLY with a raw, valid JSON object following this exact syntax blueprint:\n"
+                           f"{{\n"
+                           f"  \"vocabWords\": [\n"
+                           f"    {{ \"word\": \"string\", \"meaning\": \"string\", \"contextFromNotes\": \"string\" }}\n"
+                           f"  ],\n"
+                           f"  \"quiz\": [\n"
+                           f"    {{\n"
+                           f"      \"question\": \"string\",\n"
+                           f"      \"options\": [\"Option A text\", \"Option B text\", \"Option C text\", \"Option D text\"],\n"
+                           f"      \"correctAnswer\": \"A/B/C/D\",\n"
+                           f"      \"explanation\": \"Detailed exam-oriented breakdown explaining why this choice is correct.\"\n"
+                           f"    }}\n"
+                           f"  ]\n"
+                           f"}}"
+                }
+            ]
+            for img in body.imagesBase64:
+                content.append({
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/jpeg;base64,{img}"
+                    }
+                })
+
+            resp = gemini_client.chat.completions.create(
+                model=gemini_model,
+                messages=[{"role": "user", "content": content}],
+                response_format={"type": "json_object"},
+                temperature=0.3
+            )
+            output = json.loads(resp.choices[0].message.content)
+            print(f"Gemma 4 Vision synthesis finished. Generated {len(output.get('quiz', []))} MCQs.", flush=True)
+            return {
+                "success": True,
+                "quizData": output.get("quiz", []),
+                "vocabData": output.get("vocabWords", [])
+            }
+        except Exception as e:
+            print(f"Google AI Studio Gemma 4 Vision pipeline failed: {str(e)}. Falling back to NVIDIA/Groq...", flush=True)
 
     # --- STEP 1: OCR + MCQ generation per page ---
     def process_page_sync(img_base64: str, page_idx: int, client: OpenAI) -> dict:

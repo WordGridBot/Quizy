@@ -26,6 +26,73 @@ export async function POST(request) {
       return NextResponse.json({ error: "No image(s) provided" }, { status: 400 });
     }
 
+    // --- GOOGLE AI STUDIO / GEMINI 1.5 / GEMINI 4.0 PIPELINE (Preferred Single-Stage Vision) ---
+    const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+    if (geminiKey) {
+      try {
+        console.log("Google AI Studio key detected. Querying single-stage Gemma 4 31B Vision pipeline...");
+        const geminiClient = new OpenAI({
+          apiKey: geminiKey,
+          baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai/',
+        });
+
+        const geminiModel = process.env.GEMINI_MODEL || 'gemma-4-31b';
+
+        // Prepare message payload with text prompt and base64 images
+        const messagesContent = [
+          {
+            type: "text",
+            text: `You are an expert ${examType} Content Generator. Review all the provided note/textbook images and perform two tasks:
+1. Extract all high-priority English vocabulary words or advanced facts found in the images.
+2. Construct as many tough Multiple Choice Questions (MCQs) as possible from the images, mimicking the TCS examination style for the subject/section "${subject}".
+DO NOT exceed 25 MCQs.
+
+You must respond ONLY with a raw, valid JSON object following this exact syntax blueprint:
+{
+  "vocabWords": [
+    { "word": "string", "meaning": "string", "contextFromNotes": "string" }
+  ],
+  "quiz": [
+    {
+      "question": "string",
+      "options": ["Option A text", "Option B text", "Option C text", "Option D text"],
+      "correctAnswer": "A/B/C/D",
+      "explanation": "Detailed exam-oriented breakdown explaining why this choice is correct."
+    }
+  ]
+}`
+          }
+        ];
+
+        base64Array.forEach(img => {
+          messagesContent.push({
+            type: "image_url",
+            image_url: { url: `data:image/jpeg;base64,${img}` }
+          });
+        });
+
+        const geminiResponse = await geminiClient.chat.completions.create({
+          model: geminiModel,
+          messages: [
+            { role: "user", content: messagesContent }
+          ],
+          response_format: { type: "json_object" },
+          temperature: 0.3
+        });
+
+        const structuredOutput = JSON.parse(geminiResponse.choices[0].message.content);
+
+        return NextResponse.json({
+          success: true,
+          quizData: structuredOutput.quiz || [],
+          vocabData: structuredOutput.vocabWords || []
+        }, { status: 200 });
+
+      } catch (geminiErr) {
+        console.error("Google AI Studio Vision pipeline failed, falling back to NVIDIA:", geminiErr);
+      }
+    }
+
     // --- PIPELINE STEP 1: Highly Accurate Raw Multimodal Extraction ---
     // Process all uploaded images concurrently using a supported active multimodal model
     const ocrPromises = base64Array.map(async (imgBase64, idx) => {
